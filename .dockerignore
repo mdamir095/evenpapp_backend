@@ -6,9 +6,6 @@ README.md
 .env
 .nyc_output
 coverage
-.nyc_output
-.coverage
-.coverage/
 dist
 *.log
 .DS_Store
