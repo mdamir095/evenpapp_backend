@@ -1,0 +1,4 @@
+
+interface IEmail {
+    'email': string 
+}

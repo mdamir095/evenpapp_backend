@@ -1,0 +1,90 @@
+/* Phone Input Custom Styling - Matching existing InputGroup styles */
+
+.phoneInputCustom {
+  width: 100%;
+  display: flex;
+}
+.PhoneInput :global(.PhoneInput--focus:focus) {
+  outline: 1px solid #2d4d7d !important;
+  outline-offset: 2px;
+  border-color: black;
+}
+._phoneInputCustom_1bi6q_5 .PhoneInputInput:focus { 
+  border: 0;
+  box-shadow: none;
+  outline: 0;
+}
+.phoneInputCustom :global(.PhoneInputInput) {
+  /* Match existing Input component styling exactly */
+  border: 0px solid #d1d5db;
+  border-radius: 0.375rem; /* rounded-md */
+  padding: 0.5rem 0.75rem; /* py-2 px-3 - matching md size */
+  font-size: 0.875rem; /* text-sm */
+  line-height: 1.25rem;
+  width: 100%;
+  background-color: white;
+  color: #374151; /* text-gray-700 */
+  transition: border-color 0.15s ease-in-out;
+  border-left: none;
+  border-radius: 0 0.375rem 0.375rem 0;
+}
+._phoneInputCustom_15fuu_5{
+  border: 1px solid #d1d5db;
+}
+.phoneInputCustom :global(.PhoneInputInput:focus) {
+  outline: none;
+  /* border-color: #3b82f6;  */
+  box-shadow: none;
+  /* focus:border-blue-500 */
+}
+
+.phoneInputCustom :global(.PhoneInputCountry) {
+  /* border: 1px solid #d1d5db; */
+  /* border-radius: 0.375rem 0 0 0.375rem; */
+  border-right: none;
+  padding: 0.5rem 0.5rem;
+  background-color: white;
+  display: flex;
+  align-items: center;
+}
+
+.phoneInputError :global(.PhoneInputInput) {
+  border-color: #ef4444; /* border-red-500 */
+}
+
+.phoneInputError :global(.PhoneInputInput:focus) {
+  border-color: #ef4444; /* focus:border-red-500 */
+}
+
+.phoneInputError :global(.PhoneInputCountry) {
+  border-color: #ef4444; /* border-red-500 */
+}
+
+.phoneInputCustom :global(.PhoneInputCountrySelect) {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  outline: none;
+  color: #374151;
+}
+
+.phoneInputCustom :global(.PhoneInputCountrySelectArrow) {
+  margin-left: 1.25rem;
+  opacity: 0.6;
+}
+.PhoneInputCountry {
+  margin-right: 0px;
+}
+.phoneInputCustom :global(.PhoneInputCountryFlag) {
+  margin-right: 0.0rem;
+}
+
+.phoneInputCustom select {
+  background-color: white;
+  font-size: 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  max-height: 60px;
+  overflow: auto;
+}
