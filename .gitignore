@@ -42,7 +42,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .next
-/config/
+# /config/ - Commented out to include config files
 *.md
 BACKEND/uploads
 # Exclude all JSON files except package.json, package-lock.json, and tsconfig files
