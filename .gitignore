@@ -45,4 +45,7 @@ next-env.d.ts
 /config/
 *.md
 BACKEND/uploads
+# Exclude all JSON files except package.json and package-lock.json
 *.json
+!package.json
+!package-lock.json
