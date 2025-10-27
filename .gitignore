@@ -45,7 +45,9 @@ next-env.d.ts
 /config/
 *.md
 BACKEND/uploads
-# Exclude all JSON files except package.json and package-lock.json
+# Exclude all JSON files except package.json, package-lock.json, and tsconfig files
 *.json
 !package.json
 !package-lock.json
+!tsconfig.json
+!tsconfig.build.json
