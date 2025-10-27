@@ -1,3 +1,10 @@
 {
-  
+  "database": {
+    "type": "mongodb",
+    "url": "mongodb+srv://shiv:*****@eventbooking.4hxsvht.mongodb.net",
+    "entities": ["dist/**/*.entity{.ts,.js}"],
+    "autoLoadEntities": true,
+    "synchronize": false,
+    "logging": ["query", "error"]
+  }
 }
