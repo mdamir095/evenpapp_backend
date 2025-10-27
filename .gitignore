@@ -45,9 +45,10 @@ next-env.d.ts
 # /config/ - Commented out to include config files
 *.md
 BACKEND/uploads
-# Exclude all JSON files except package.json, package-lock.json, and tsconfig files
+# Exclude all JSON files except package.json, package-lock.json, tsconfig files, and nest-cli.json
 *.json
 !package.json
 !package-lock.json
 !tsconfig.json
 !tsconfig.build.json
+!nest-cli.json
