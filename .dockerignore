@@ -11,3 +11,6 @@ coverage
 .coverage/
 dist
 *.log
+.DS_Store
+.vscode
+.idea
