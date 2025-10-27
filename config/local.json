@@ -1,0 +1,16 @@
+{
+    "aws": {
+        "secretname": "local.secret",
+        "regionName":"us-east-1",
+        "bucketName": "consort-poc",
+        "bucketFolderName": "uploads",
+        "bucketTempFolderName": "temp-documents"
+    },
+    "mongodb": {
+        "type": "mongodb",
+        "url": "mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking",
+        "database": "event_booking",
+        "useNewUrlParser": true,
+        "useUnifiedTopology": true
+    }
+}

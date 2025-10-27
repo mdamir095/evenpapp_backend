@@ -1,0 +1,41 @@
+{
+  "server": {
+    "port": 10030,
+    "prefix": "api/v1"
+  },
+  "cors": [
+    "http://localhost:10030",
+    "http://localhost:5173",
+    "http://localhost:4200"
+  ],
+  "jwt": {
+    "secret": "asta-lavista-namonyano",
+    "expiry": "2d",
+    "expireTime": 1800000,
+    "jwtIssuer": "http://localhost:4200"
+  },
+  "auth": {
+    "cookieKeyName": "accessToken",
+    "customerCookiesName": "customerDetail",
+    "googleClientId": "672548980935-a0btm94uosor2tt6ltku06m3fk0o5ipq.apps.googleusercontent.com"
+  },
+  "google": {
+    "mapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"
+  },
+  "sendGrid": {
+    "apiKey": "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",
+    "fromEmail": "majid@whiz-solutions.com",
+    "fromName": "Pacifica Shipping"
+  },
+  "email" :{
+    "SMTP_HOST": "smtp.gmail.com",
+    "SMTP_PORT": 587,
+    "SMTP_SECURE": false,
+    "SMTP_USER": "ajay@whiz-solutions.com",
+    "SMTP_PASS": "gdqvxrxollckctpb",
+    "SMTP_FROM": "ajay@whiz-solutions.com"
+  },
+  "general": {
+    "frontendUrl": "http://localhost:5173"
+  }
+}
