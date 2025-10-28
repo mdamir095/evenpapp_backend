@@ -117,15 +117,42 @@ export class UserService {
 
   async validateLogin(payload: LoginReqDto): Promise<User> {
     const { email, password } = payload;
+    console.log('🔍 UserService - validateLogin called for email:', email);
+    
     const user = await this.userRepository.findOne({ where: { email: email } });
+    console.log('👤 User found in database:', !!user);
+    
     if (user) {
+      console.log('📋 User details:', {
+        id: user.id,
+        email: user.email,
+        isBlocked: user.isBlocked,
+        isMobileAppUser: user.isMobileAppUser,
+        isActive: user.isActive,
+        hasPassword: !!user.password,
+        roleIds: user.roleIds
+      });
+      
       let match = await bcrypt.compare(password, user.password);
-      if (match && !user.isBlocked && (user.isMobileAppUser || (user.isActive && !user.isMobileAppUser))) {
+      console.log('🔐 Password match result:', match);
+      
+      const isEligible = !user.isBlocked && (user.isMobileAppUser || (user.isActive && !user.isMobileAppUser));
+      console.log('✅ User eligibility check:', {
+        isBlocked: user.isBlocked,
+        isMobileAppUser: user.isMobileAppUser,
+        isActive: user.isActive,
+        isEligible: isEligible
+      });
+      
+      if (match && isEligible) {
+        console.log('🎉 Login successful - returning user');
         return user;
       } else {
+        console.log('❌ Login failed - conditions not met');
         throw new UnauthorizedException('Invalid credentials');
       }
     } else {
+      console.log('❌ User not found in database');
       throw new UnauthorizedException('Invalid credentials');
     }
   }
