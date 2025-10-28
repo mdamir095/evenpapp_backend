@@ -51,26 +51,9 @@ export class AuthController {
     @ApiBody({ type: LoginReqDto })
     @ApiResponse({ status: 200, description: 'Login successful' })
     public async login(@Req() req: any, @Body() body: LoginReqDto) {
-        console.log('🚀 Auth Controller - Login endpoint called');
-        console.log('📦 Request body:', JSON.stringify(body, null, 2));
-        console.log('👤 User from request:', req.user ? 'EXISTS' : 'NULL');
-        
-        try {
-            const user = req.user as User;
-            console.log('👤 User details:', user ? {
-                id: user.id,
-                email: user.email,
-                firstName: user.firstName,
-                lastName: user.lastName
-            } : 'NULL');
-            
-            const result = await this.authService.signinJwt(user);
-            console.log('🎉 JWT generated successfully');
-            return result;
-        } catch (error) {
-            console.log('❌ Error in login controller:', error.message);
-            throw error;
-        }
+        const user = req.user as User;
+        const result = await this.authService.signinJwt(user);
+        return result;
     }
 
     @Post('register')
