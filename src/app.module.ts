@@ -86,7 +86,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
       useFactory: (config: ConfigService) => {
           // For Railway production environment
           if (process.env.NODE_ENV === 'production') {
-            const databaseUrl = process.env.DATABASE_URL || 'mongodb+srv://shiv:*****@eventbooking.4hxsvht.mongodb.net';
+            const databaseUrl = process.env.DATABASE_URL || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking';
             console.log('Using Railway database configuration');
             console.log('Database URL exists:', !!process.env.DATABASE_URL);
             console.log('Database URL length:', databaseUrl ? databaseUrl.length : 0);
