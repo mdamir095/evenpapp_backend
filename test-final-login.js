@@ -1,9 +1,13 @@
 const https = require('https');
 
-async function testLoginFix() {
-  console.log('🔍 Testing login fix...');
+async function testFinalLogin() {
+  console.log('🔍 Testing final login fix...');
   
   try {
+    // Wait a moment for deployment
+    console.log('⏳ Waiting for deployment...');
+    await new Promise(resolve => setTimeout(resolve, 30000));
+    
     // Test database endpoint
     console.log('\n1️⃣ Database Test:');
     const dbResponse = await fetch('https://evenpappbackend-production.up.railway.app/api/v1/test-db');
@@ -32,8 +36,33 @@ async function testLoginFix() {
     
     if (loginResponse.status === 200) {
       console.log('\n🎉 LOGIN SUCCESSFUL!');
+      console.log('✅ The issue has been resolved!');
     } else {
       console.log('\n❌ LOGIN STILL FAILING');
+      console.log('Response:', loginData);
+    }
+    
+    // Test frontend login
+    console.log('\n3️⃣ Frontend Login Test:');
+    const frontendLoginResponse = await fetch('https://evenpappfrontend-production.up.railway.app/api/v1/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: 'shiv@whiz-solutions.com',
+        password: 'Test@123'
+      })
+    });
+    
+    console.log('Frontend Login Status:', frontendLoginResponse.status);
+    const frontendLoginData = await frontendLoginResponse.json();
+    console.log('Frontend Login Response:', frontendLoginData);
+    
+    if (frontendLoginResponse.status === 200) {
+      console.log('\n🎉 FRONTEND LOGIN SUCCESSFUL!');
+    } else {
+      console.log('\n❌ FRONTEND LOGIN STILL FAILING');
     }
     
   } catch (error) {
@@ -41,4 +70,4 @@ async function testLoginFix() {
   }
 }
 
-testLoginFix();
+testFinalLogin();
