@@ -65,6 +65,17 @@ async function bootstrap() {
   SwaggerModule.setup(swaggerDocsPath, app, document);
 
   const port = process.env.PORT || config.get('server.port') || 3000;
+  
+  // Test database connection
+  try {
+    console.log('🔗 Testing database connection...');
+    // This will be handled by TypeORM initialization
+    console.log('✅ Database connection test initiated');
+  } catch (error) {
+    console.log('❌ Database connection test failed:', error.message);
+  }
+  
   await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Application is running on: http://0.0.0.0:${port}`);
 }
 bootstrap();

@@ -119,8 +119,16 @@ export class UserService {
     const { email, password } = payload;
     console.log('🔍 UserService - validateLogin called for email:', email);
     
-    const user = await this.userRepository.findOne({ where: { email: email } });
-    console.log('👤 User found in database:', !!user);
+    let user;
+    try {
+      console.log('🔗 Attempting database query...');
+      user = await this.userRepository.findOne({ where: { email: email } });
+      console.log('👤 User found in database:', !!user);
+      console.log('📊 Database query completed successfully');
+    } catch (dbError) {
+      console.log('❌ Database query failed:', dbError.message);
+      throw new UnauthorizedException('Database connection failed');
+    }
     
     if (user) {
       console.log('📋 User details:', {

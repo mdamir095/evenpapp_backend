@@ -94,7 +94,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             console.log('🔗 Database URL starts with:', databaseUrl ? databaseUrl.substring(0, 20) + '...' : 'Not set');
             console.log('🏗️ Building TypeORM configuration...');
             
-            return {
+            const config = {
               type: 'mongodb',
               url: databaseUrl,
               entities: [
@@ -107,6 +107,15 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
               useNewUrlParser: true,
               useUnifiedTopology: true,
             };
+            
+            console.log('🏗️ TypeORM config created:', {
+              type: config.type,
+              url: config.url ? 'Set' : 'Not set',
+              entities: config.entities.length,
+              synchronize: config.synchronize
+            });
+            
+            return config;
           }
           
           // For other environments, use config
