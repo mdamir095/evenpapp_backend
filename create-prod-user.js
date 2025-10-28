@@ -22,9 +22,82 @@ async function createProdUser() {
         email: existingUser.email,
         isActive: existingUser.isActive,
         isMobileAppUser: existingUser.isMobileAppUser,
-        isBlocked: existingUser.isBlocked
+        isBlocked: existingUser.isBlocked,
+        roleIds: existingUser.roleIds
       });
+      
+      // Check if user has roles
+      if (!existingUser.roleIds || existingUser.roleIds.length === 0) {
+        console.log('User has no roles, updating...');
+        const roles = db.collection('role');
+        const userRole = await roles.findOne({ name: 'USER' });
+        
+        if (userRole) {
+          await users.updateOne(
+            { _id: existingUser._id },
+            { $set: { roleIds: [userRole._id], updatedAt: new Date() } }
+          );
+          console.log('User updated with role:', userRole._id);
+        } else {
+          console.log('USER role not found, creating it...');
+          // Create role and feature if they don't exist
+          const features = db.collection('feature');
+          let userFeature = await features.findOne({ name: 'USER' });
+          
+          if (!userFeature) {
+            userFeature = await features.insertOne({
+              name: 'USER',
+              isActive: true,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            });
+            userFeature = await features.findOne({ name: 'USER' });
+          }
+          
+          const newRole = await roles.insertOne({
+            name: 'USER',
+            featureIds: [userFeature._id],
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+          
+          await users.updateOne(
+            { _id: existingUser._id },
+            { $set: { roleIds: [newRole.insertedId], updatedAt: new Date() } }
+          );
+          console.log('USER role created and assigned to user');
+        }
+      }
       return;
+    }
+    
+    // First, let's check if roles exist
+    const roles = db.collection('role');
+    const userRole = await roles.findOne({ name: 'USER' });
+    console.log('User role found:', !!userRole);
+    
+    if (!userRole) {
+      console.log('Creating USER role...');
+      const features = db.collection('feature');
+      let userFeature = await features.findOne({ name: 'USER' });
+      
+      if (!userFeature) {
+        userFeature = await features.insertOne({
+          name: 'USER',
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+        userFeature = await features.findOne({ name: 'USER' });
+      }
+      
+      const newRole = await roles.insertOne({
+        name: 'USER',
+        featureIds: [userFeature._id],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      console.log('USER role created:', newRole.insertedId);
     }
     
     // Create a test user
@@ -40,6 +113,7 @@ async function createProdUser() {
       isMobileAppUser: true,
       userType: 'USER',
       isBlocked: false,
+      roleIds: userRole ? [userRole._id] : [],
       createdAt: new Date(),
       updatedAt: new Date()
     };

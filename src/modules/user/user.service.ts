@@ -156,6 +156,13 @@ export class UserService {
     let roles: any = [];
     if (result.roles) {
       roles = result.roles;
+    } else if (result.roleIds && result.roleIds.length > 0) {
+      // If roles are not populated but roleIds exist, create a basic roles structure
+      roles = result.roleIds.map((roleId: any) => ({
+        id: roleId,
+        name: 'USER', // Default role name
+        features: [] // Empty features for now
+      }));
     }
 
     const tokenPayload = {
