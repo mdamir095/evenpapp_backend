@@ -104,6 +104,13 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
               logging: ["query", "error"],
               useNewUrlParser: true,
               useUnifiedTopology: true,
+              tls: true,
+              tlsAllowInvalidCertificates: false,
+              tlsInsecure: false,
+              minTLSVersion: 'TLSv1.2',
+              retryWrites: true,
+              w: 'majority',
+              appName: 'EventBooking'
             };
           }
           
