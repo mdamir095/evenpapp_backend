@@ -1,10 +1,9 @@
 {
-  "database": {
+  "mongodb": {
     "type": "mongodb",
-    "url": "mongodb+srv://shiv:*****@eventbooking.4hxsvht.mongodb.net",
-    "entities": ["dist/**/*.entity{.ts,.js}"],
-    "autoLoadEntities": true,
-    "synchronize": false,
-    "logging": ["query", "error"]
+    "url": "mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking",
+    "database": "event_booking",
+    "useNewUrlParser": true,
+    "useUnifiedTopology": true
   }
 }

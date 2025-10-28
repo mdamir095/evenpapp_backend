@@ -86,11 +86,18 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
       useFactory: (config: ConfigService) => {
           // For Railway production environment
           if (process.env.NODE_ENV === 'production') {
-            const databaseUrl = process.env.DATABASE_URL || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking';
+            // Use config service to get database URL from config files
+            const databaseUrl = process.env.DATABASE_URL || config.get('mongodb.url');
             console.log('Production mode - Database URL configured');
             console.log('NODE_ENV:', process.env.NODE_ENV);
             console.log('DATABASE_URL from env:', process.env.DATABASE_URL ? 'Set' : 'Not set');
-            console.log('Using database URL:', databaseUrl.substring(0, 30) + '...');
+            console.log('Config service mongodb.url:', config.get('mongodb.url') ? 'Set' : 'Not set');
+            console.log('Using database URL from config:', databaseUrl ? 'Set' : 'Not set');
+            console.log('Database URL preview:', databaseUrl ? databaseUrl.substring(0, 30) + '...' : 'Not available');
+            
+            if (!databaseUrl) {
+              throw new Error('Database URL not found in environment variables or config');
+            }
             
             return {
               type: 'mongodb',
