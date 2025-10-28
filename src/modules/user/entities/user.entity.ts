@@ -2,7 +2,7 @@ import { Entity, Column, ObjectId, BeforeInsert } from "typeorm";
 import { BaseModel } from "@shared/entities/base.entity";
 import { Exclude } from "class-transformer";
 
-@Entity({ name: 'users' })
+@Entity({ name: 'user' })
 export class User extends BaseModel {
   constructor() {
     super();
