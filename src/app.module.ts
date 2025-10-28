@@ -87,10 +87,12 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
           // For Railway production environment
           if (process.env.NODE_ENV === 'production') {
             const databaseUrl = process.env.DATABASE_URL || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking';
-            console.log('Using Railway database configuration');
-            console.log('Database URL exists:', !!process.env.DATABASE_URL);
-            console.log('Database URL length:', databaseUrl ? databaseUrl.length : 0);
-            console.log('Database URL starts with:', databaseUrl ? databaseUrl.substring(0, 20) + '...' : 'Not set');
+            console.log('🚀 Using Railway database configuration');
+            console.log('📊 NODE_ENV:', process.env.NODE_ENV);
+            console.log('🔗 Database URL exists:', !!process.env.DATABASE_URL);
+            console.log('📏 Database URL length:', databaseUrl ? databaseUrl.length : 0);
+            console.log('🔗 Database URL starts with:', databaseUrl ? databaseUrl.substring(0, 20) + '...' : 'Not set');
+            console.log('🏗️ Building TypeORM configuration...');
             
             return {
               type: 'mongodb',
