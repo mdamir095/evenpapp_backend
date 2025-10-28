@@ -86,7 +86,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
       useFactory: (config: ConfigService) => {
           // For Railway production environment
           if (process.env.NODE_ENV === 'production') {
-            // Use config service to get database URL from config files
+            // Use environment variables first, then config service
             const databaseUrl = process.env.DATABASE_URL || config.get('mongodb.url');
             console.log('Production mode - Database URL configured');
             console.log('NODE_ENV:', process.env.NODE_ENV);
@@ -94,6 +94,11 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             console.log('Config service mongodb.url:', config.get('mongodb.url') ? 'Set' : 'Not set');
             console.log('Using database URL from config:', databaseUrl ? 'Set' : 'Not set');
             console.log('Database URL preview:', databaseUrl ? databaseUrl.substring(0, 30) + '...' : 'Not available');
+            
+            // Log other important environment variables
+            console.log('PORT:', process.env.PORT || 'Not set');
+            console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+            console.log('CORS_ORIGINS:', process.env.CORS_ORIGINS ? 'Set' : 'Not set');
             
             if (!databaseUrl) {
               throw new Error('Database URL not found in environment variables or config');
