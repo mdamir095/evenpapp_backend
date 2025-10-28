@@ -119,6 +119,21 @@ export class UserService {
     const { email, password } = payload;
     console.log(`Login attempt for: ${email}`);
     
+    // Debug: Check database connection and collection
+    try {
+      const userCount = await this.userRepository.count();
+      console.log(`Total users in database: ${userCount}`);
+      
+      // Try to find any user first
+      const anyUser = await this.userRepository.findOne({});
+      console.log(`Any user found: ${!!anyUser}`);
+      if (anyUser) {
+        console.log(`Sample user email: ${anyUser.email}`);
+      }
+    } catch (error) {
+      console.log(`Database query error: ${error.message}`);
+    }
+    
     const user = await this.userRepository.findOne({ where: { email: email } });
     console.log(`User found: ${!!user}`);
     
