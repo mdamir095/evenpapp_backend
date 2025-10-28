@@ -96,30 +96,33 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             }
             
             // Use environment variables first, then config service
-            const envDatabaseUrl = "mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking";
+            const envDatabaseUrl = process.env.DATABASE_URL;
             const configDatabaseUrl = config.get('mongodb.url');
             const databaseUrl = envDatabaseUrl || configDatabaseUrl;
+            
+            // Force use the correct database URL if config is not working
+            const finalDatabaseUrl = databaseUrl || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking';
             
             console.log('Production mode - Database URL configured');
             console.log('NODE_ENV:', process.env.NODE_ENV);
             console.log('DATABASE_URL from env:', envDatabaseUrl ? 'Set' : 'Not set');
             console.log('Config service mongodb.url:', configDatabaseUrl ? 'Set' : 'Not set');
-            console.log('Final database URL source:', envDatabaseUrl ? 'Environment Variable' : 'Config File');
-            console.log('Using database URL:', databaseUrl ? 'Set' : 'Not set');
-            console.log('Database URL preview:', databaseUrl ? databaseUrl.substring(0, 30) + '...' : 'Not available');
+            console.log('Final database URL source:', envDatabaseUrl ? 'Environment Variable' : (configDatabaseUrl ? 'Config File' : 'Fallback'));
+            console.log('Using database URL:', finalDatabaseUrl ? 'Set' : 'Not set');
+            console.log('Database URL preview:', finalDatabaseUrl ? finalDatabaseUrl.substring(0, 30) + '...' : 'Not available');
             
             // Log other important environment variables
             console.log('PORT:', process.env.PORT || 'Not set');
             console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not set');
             console.log('CORS_ORIGINS:', process.env.CORS_ORIGINS ? 'Set' : 'Not set');
             
-            if (!databaseUrl) {
+            if (!finalDatabaseUrl) {
               throw new Error('Database URL not found in environment variables or config');
             }
             
             return {
               type: 'mongodb',
-              url: databaseUrl,
+              url: finalDatabaseUrl,
               entities: [
                 __dirname + '/**/*.mongo.entity{.ts,.js}',
                 __dirname + '/**/*.entity{.ts,.js}'
