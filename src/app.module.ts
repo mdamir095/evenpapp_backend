@@ -88,7 +88,9 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
           if (process.env.NODE_ENV === 'production') {
             const databaseUrl = process.env.DATABASE_URL || 'mongodb+srv://shiv:*****@eventbooking.4hxsvht.mongodb.net';
             console.log('Using Railway database configuration');
-            console.log('Database URL:', databaseUrl ? 'Set' : 'Not set');
+            console.log('Database URL exists:', !!process.env.DATABASE_URL);
+            console.log('Database URL length:', databaseUrl ? databaseUrl.length : 0);
+            console.log('Database URL starts with:', databaseUrl ? databaseUrl.substring(0, 20) + '...' : 'Not set');
             
             return {
               type: 'mongodb',
