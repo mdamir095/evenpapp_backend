@@ -134,8 +134,31 @@ export class UserService {
       console.log(`Database query error: ${error.message}`);
     }
     
-    const user = await this.userRepository.findOne({ where: { email: email } });
-    console.log(`User found: ${!!user}`);
+    // Try different query approaches
+    console.log(`Searching for email: "${email}"`);
+    
+    // Method 1: Standard query
+    let user = await this.userRepository.findOne({ where: { email: email } });
+    console.log(`Method 1 - User found: ${!!user}`);
+    
+    if (!user) {
+      // Method 2: Case insensitive search
+      user = await this.userRepository.findOne({ where: { email: { $regex: new RegExp(`^${email}$`, 'i') } } });
+      console.log(`Method 2 - Case insensitive search: ${!!user}`);
+    }
+    
+    if (!user) {
+      // Method 3: Find all users and filter
+      const allUsers = await this.userRepository.find({});
+      console.log(`Method 3 - All users count: ${allUsers.length}`);
+      allUsers.forEach((u, index) => {
+        console.log(`User ${index + 1}: email="${u.email}", match=${u.email === email}`);
+      });
+      user = allUsers.find(u => u.email === email) || null;
+      console.log(`Method 3 - Found user: ${!!user}`);
+    }
+    
+    console.log(`Final user found: ${!!user}`);
     
     if (user) {
       let match = await bcrypt.compare(password, user.password);
