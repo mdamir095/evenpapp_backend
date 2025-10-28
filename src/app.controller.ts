@@ -22,4 +22,21 @@ export class AppController {
       environment: process.env.NODE_ENV || 'development'
     };
   }
+
+  @Get('test-db')
+  async testDatabase() {
+    try {
+      // This will be implemented to test database connection
+      return {
+        status: 'Database test endpoint ready',
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      return {
+        status: 'Database test failed',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
 }

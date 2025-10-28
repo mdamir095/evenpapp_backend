@@ -89,6 +89,8 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             const databaseUrl = process.env.DATABASE_URL || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking';
             console.log('Production mode - Database URL configured');
             console.log('NODE_ENV:', process.env.NODE_ENV);
+            console.log('DATABASE_URL from env:', process.env.DATABASE_URL ? 'Set' : 'Not set');
+            console.log('Using database URL:', databaseUrl.substring(0, 30) + '...');
             
             return {
               type: 'mongodb',
