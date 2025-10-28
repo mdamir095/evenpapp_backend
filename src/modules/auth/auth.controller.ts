@@ -51,8 +51,11 @@ export class AuthController {
     @ApiBody({ type: LoginReqDto })
     @ApiResponse({ status: 200, description: 'Login successful' })
     public async login(@Req() req: any, @Body() body: LoginReqDto) {
+        console.log('Login endpoint called with:', body.email);
         const user = req.user as User;
+        console.log('User from guard:', user ? 'Found' : 'Not found');
         const result = await this.authService.signinJwt(user);
+        console.log('JWT generated successfully');
         return result;
     }
 

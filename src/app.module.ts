@@ -87,6 +87,8 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
           // For Railway production environment
           if (process.env.NODE_ENV === 'production') {
             const databaseUrl = process.env.DATABASE_URL || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking';
+            console.log('Production mode - Database URL configured');
+            console.log('NODE_ENV:', process.env.NODE_ENV);
             
             return {
               type: 'mongodb',
