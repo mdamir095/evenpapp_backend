@@ -15,7 +15,7 @@ import { HttpStatus } from "@nestjs/common";
 
 @ApiTags('Users')
 @ApiBearerAuth()
-@Controller('user')
+@Controller('users')
 export class UserController {
     
     constructor(private readonly userService: UserService,private readonly formService: FormService) {    
@@ -95,7 +95,7 @@ export class UserController {
     @ApiQuery({ name: 'page', type: Number, required: false, description: 'Page number (default 1)' })
     @ApiQuery({ name: 'limit', type: Number, required: false, description: 'Page size (default 10)' })
     @ApiQuery({ name: 'type', type: String, required: false, description: 'Filter forms by type (e.g., venue-category, event, etc.)' })
-    @Get()
+    @Get('forms')
     async findAll(
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,

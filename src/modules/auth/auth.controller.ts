@@ -50,11 +50,18 @@ export class AuthController {
     @HttpCode(200)
     @ApiBody({ type: LoginReqDto })
     @ApiResponse({ status: 200, description: 'Login successful' })
-    @UseGuards(LocalAuthGuard)
     public async login(@Req() req: any, @Body() body: LoginReqDto) {
         const user = req.user as User
         const result = await this.authService.signinJwt(user);
         return result
+    }
+
+    @Post('register')
+    @HttpCode(200)
+    @ApiBody({ type: SignUpReqDto })
+    @ApiResponse({ status: 200, description: 'Registration successful' })
+    public async register(@Body() payload: SignUpReqDto) {
+        return await this.authService.signUp(payload);
     }
    
     @Post('send-otp')
