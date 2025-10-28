@@ -99,6 +99,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
                 __dirname + '/**/*.mongo.entity{.ts,.js}',
                 __dirname + '/**/*.entity{.ts,.js}'
               ],
+              entityPrefix: '',
               synchronize: false,
               autoLoadEntities: true,
               logging: ["query", "error"],
@@ -110,7 +111,11 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
               minTLSVersion: 'TLSv1.2',
               retryWrites: true,
               w: 'majority',
-              appName: 'EventBooking'
+              appName: 'EventBooking',
+              maxPoolSize: 10,
+              serverSelectionTimeoutMS: 5000,
+              socketTimeoutMS: 45000,
+              connectTimeoutMS: 10000
             };
           }
           
