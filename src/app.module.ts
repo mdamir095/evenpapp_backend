@@ -96,7 +96,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             }
             
             // Use environment variables first, then config service
-            const envDatabaseUrl = process.env.DATABASE_URL;
+            const envDatabaseUrl = "mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking";
             const configDatabaseUrl = config.get('mongodb.url');
             const databaseUrl = envDatabaseUrl || configDatabaseUrl;
             
