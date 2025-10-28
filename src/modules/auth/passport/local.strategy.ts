@@ -19,14 +19,23 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(req: any): Promise<User> {
+    console.log('🚀 Local strategy validate called');
+    console.log('📦 Request body:', req.body);
+    
     const loginDto = plainToInstance(LoginReqDto, req.body);
+    console.log('📝 Login DTO:', loginDto);
+    
     const errors = await validate(loginDto);
     if (errors.length > 0) {
+      console.log('❌ Validation errors:', errors);
       throw new BadRequestException(
         errors.map((err: any) => Object.values(err.constraints)).flat()
       );
     }
+    
+    console.log('✅ Validation passed, calling userService.validateLogin');
     const user = await this.userService.validateLogin(loginDto);
+    console.log('👤 User returned from validateLogin:', !!user);
     return user;
   }
 }
