@@ -117,15 +117,33 @@ export class UserService {
 
   async validateLogin(payload: LoginReqDto): Promise<User> {
     const { email, password } = payload;
+    console.log('Login attempt for email:', email);
+    
     const user = await this.userRepository.findOne({ where: { email: email } });
+    console.log('User found:', !!user);
+    
     if (user) {
+      console.log('User details:', {
+        id: user.id,
+        email: user.email,
+        isBlocked: user.isBlocked,
+        isMobileAppUser: user.isMobileAppUser,
+        isActive: user.isActive,
+        hasPassword: !!user.password
+      });
+      
       let match = await bcrypt.compare(password, user.password);
+      console.log('Password match:', match);
+      
       if (match && !user.isBlocked && (user.isMobileAppUser || (user.isActive && !user.isMobileAppUser))) {
+        console.log('Login successful');
         return user;
       } else {
+        console.log('Login failed - conditions not met');
         throw new UnauthorizedException('Invalid credentials');
       }
     } else {
+      console.log('User not found');
       throw new UnauthorizedException('Invalid credentials');
     }
   }
