@@ -19,6 +19,14 @@ export class DatabaseModule {
             // Check if we're in production (Railway) and use environment variables
             if (process.env.NODE_ENV === 'production') {
               const databaseUrl = process.env.DATABASE_URL || configService.get('database.url');
+              console.log('Production mode - Database URL:', databaseUrl ? 'Set' : 'Not set');
+              console.log('NODE_ENV:', process.env.NODE_ENV);
+              console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+              
+              if (!databaseUrl) {
+                throw new Error('DATABASE_URL environment variable is required in production');
+              }
+              
               return {
                 type: 'mongodb',
                 url: databaseUrl,

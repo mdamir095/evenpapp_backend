@@ -84,6 +84,28 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
     TypeOrmModule.forRootAsync({
       name: 'mongo',
       useFactory: (config: ConfigService) => {
+          // For Railway production environment
+          if (process.env.NODE_ENV === 'production') {
+            const databaseUrl = process.env.DATABASE_URL || 'mongodb+srv://shiv:*****@eventbooking.4hxsvht.mongodb.net';
+            console.log('Using Railway database configuration');
+            console.log('Database URL:', databaseUrl ? 'Set' : 'Not set');
+            
+            return {
+              type: 'mongodb',
+              url: databaseUrl,
+              entities: [
+                __dirname + '/**/*.mongo.entity{.ts,.js}',
+                __dirname + '/**/*.entity{.ts,.js}'
+              ],
+              synchronize: false,
+              autoLoadEntities: true,
+              logging: ["query", "error"],
+              useNewUrlParser: true,
+              useUnifiedTopology: true,
+            };
+          }
+          
+          // For other environments, use config
           const typeOrmConfig = Object.assign(
               {
                   entities: [
