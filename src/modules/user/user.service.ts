@@ -45,6 +45,7 @@ export class UserService {
     private readonly configService: ConfigService,
     private readonly mailerService: MailerService,
     private readonly awsS3Service: AwsS3Service,
+    private readonly supabaseService: SupabaseService,
   ) {
     this.generalConfig = this.configService.get('general');
     this.jwtConfig = this.configService.get('jwt');
