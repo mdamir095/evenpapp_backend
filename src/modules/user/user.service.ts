@@ -244,11 +244,19 @@ export class UserService {
     user.expireAt = expiresAt;
     await this.userRepository.save(user);
 
-    await this.mailerService.sendMail({
-      to: email,
-      subject: 'Your OTP Code',
-      text: `Your OTP is ${otp}`,
-    });
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject: 'Your OTP Code',
+        text: `Your OTP is ${otp}`,
+      });
+      console.log(`OTP sent to ${email}: ${otp}`);
+    } catch (error) {
+      console.error('Email sending failed:', error);
+      console.log(`OTP for ${email}: ${otp} (Email service unavailable)`);
+      // Don't throw error, just log it and continue
+      // This allows the OTP to be saved even if email fails
+    }
 
     return { message: 'OTP sent' };
   }

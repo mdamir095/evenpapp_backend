@@ -71,8 +71,14 @@ export class AuthController {
     @HttpCode(200)
     @ApiBody({ type: SendOtpDto })
     @ApiResponse({ status: 200, description: 'OTP sent' })
+    @ApiResponse({ status: 500, description: 'Internal Server Error' })
     async sendOtp(@Body() dto: SendOtpDto) {
-      return this.authService.sendOtp(dto.email);
+      try {
+        return await this.authService.sendOtp(dto.email);
+      } catch (error) {
+        console.error('Send OTP error:', error);
+        throw error;
+      }
     }
   
     @Post('verify-otp')
