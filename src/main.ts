@@ -29,8 +29,9 @@ async function bootstrap() {
   const emailService = app.get<EmailService>(EmailService);
 
 
-  var apiPrefix = config.get('server.prefix');
-  app.setGlobalPrefix(apiPrefix);
+  // Option 1: No global prefix - all endpoints accessible directly
+  // var apiPrefix = config.get('server.prefix');
+  // app.setGlobalPrefix(apiPrefix);
 
   app.enableCors({
     origin: function (origin, callback) {
