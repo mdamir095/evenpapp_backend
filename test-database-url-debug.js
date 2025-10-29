@@ -1,10 +1,10 @@
 const https = require('https');
 
-async function debugDatabaseConnection() {
-  console.log('🔍 Debugging database connection...');
+async function testDatabaseUrlDebug() {
+  console.log('🔍 Testing database URL debug...');
   
   try {
-    // Test the database endpoint
+    // Test the database endpoint to see the debug logs
     const response = await fetch('https://evenpappbackend-production.up.railway.app/api/v1/test-db');
     const data = await response.json();
     
@@ -17,18 +17,9 @@ async function debugDatabaseConnection() {
     console.log('\nHealth Response:');
     console.log(JSON.stringify(healthData, null, 2));
     
-    // Test if we can get any response from the backend
-    console.log('\n🔍 Testing backend availability...');
-    try {
-      const testResponse = await fetch('https://evenpappbackend-production.up.railway.app/api/v1/');
-      console.log('Backend root status:', testResponse.status);
-    } catch (error) {
-      console.log('Backend root error:', error.message);
-    }
-    
   } catch (error) {
     console.error('❌ Error:', error.message);
   }
 }
 
-debugDatabaseConnection();
+testDatabaseUrlDebug();

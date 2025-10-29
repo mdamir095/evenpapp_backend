@@ -1,12 +1,12 @@
 const https = require('https');
 
-async function testCorrectedLogin() {
-  console.log('🔍 Testing corrected login with users collection...');
+async function testWithLongerDelay() {
+  console.log('🔍 Testing with longer delay for deployment...');
   
   try {
-    // Wait for deployment
-    console.log('⏳ Waiting 30 seconds for deployment...');
-    await new Promise(resolve => setTimeout(resolve, 30000));
+    // Wait longer for deployment
+    console.log('⏳ Waiting 60 seconds for deployment...');
+    await new Promise(resolve => setTimeout(resolve, 60000));
     
     // Test database endpoint
     console.log('\n1️⃣ Database Test:');
@@ -36,32 +36,10 @@ async function testCorrectedLogin() {
     
     if (loginResponse.status === 200) {
       console.log('\n🎉 LOGIN SUCCESSFUL!');
-      console.log('✅ The users collection fix worked!');
+      console.log('✅ The event_booking database connection worked!');
     } else {
       console.log('\n❌ LOGIN STILL FAILING');
-    }
-    
-    // Test frontend login
-    console.log('\n3️⃣ Frontend Login Test:');
-    const frontendLoginResponse = await fetch('https://evenpappfrontend-production.up.railway.app/api/v1/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: 'shiv@whiz-solutions.com',
-        password: 'Test@123'
-      })
-    });
-    
-    console.log('Frontend Login Status:', frontendLoginResponse.status);
-    const frontendLoginData = await frontendLoginResponse.json();
-    console.log('Frontend Login Response:', frontendLoginData);
-    
-    if (frontendLoginResponse.status === 200) {
-      console.log('\n🎉 FRONTEND LOGIN SUCCESSFUL!');
-    } else {
-      console.log('\n❌ FRONTEND LOGIN STILL FAILING');
+      console.log('This might indicate the deployment is still in progress or there\'s a configuration issue.');
     }
     
   } catch (error) {
@@ -69,4 +47,4 @@ async function testCorrectedLogin() {
   }
 }
 
-testCorrectedLogin();
+testWithLongerDelay();

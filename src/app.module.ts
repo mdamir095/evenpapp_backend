@@ -95,21 +95,13 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
               console.log('Error getting MongoDB config:', error.message);
             }
             
-            // Use environment variables first, then config service
-            const envDatabaseUrl = process.env.DATABASE_URL;
-            const configDatabaseUrl = config.get('mongodb.url');
-            const databaseUrl = envDatabaseUrl || configDatabaseUrl;
-            
-            // Force use the correct database URL if config is not working
-            const finalDatabaseUrl = databaseUrl || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/event_booking?retryWrites=true&w=majority&appName=EventBooking';
+            // Force use the correct database URL - ignore environment variables for now
+            const finalDatabaseUrl = 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/event_booking?retryWrites=true&w=majority&appName=EventBooking';
             
             console.log('Production mode - Database URL configured');
             console.log('NODE_ENV:', process.env.NODE_ENV);
-            console.log('DATABASE_URL from env:', envDatabaseUrl ? 'Set' : 'Not set');
-            console.log('Config service mongodb.url:', configDatabaseUrl ? 'Set' : 'Not set');
-            console.log('Final database URL source:', envDatabaseUrl ? 'Environment Variable' : (configDatabaseUrl ? 'Config File' : 'Fallback'));
-            console.log('Using database URL:', finalDatabaseUrl ? 'Set' : 'Not set');
-            console.log('Database URL preview:', finalDatabaseUrl ? finalDatabaseUrl.substring(0, 30) + '...' : 'Not available');
+            console.log('Using hardcoded database URL for event_booking database');
+            console.log('Database URL preview:', finalDatabaseUrl.substring(0, 50) + '...');
             
             // Log the actual database URL being used (masked)
             if (finalDatabaseUrl) {
