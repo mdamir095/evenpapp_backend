@@ -8,7 +8,7 @@
     },
     "mongodb": {
         "type": "mongodb",
-        "url": "mongodb+srv://shiv:Admin@123@event_booking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking",
+        "url": "mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking",
         "database": "event_booking",
         "useNewUrlParser": true,
         "useUnifiedTopology": true

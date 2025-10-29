@@ -101,7 +101,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             const databaseUrl = envDatabaseUrl || configDatabaseUrl;
             
             // Force use the correct database URL if config is not working
-            const finalDatabaseUrl = databaseUrl || 'mongodb+srv://shiv:Admin@123@event_booking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking';
+            const finalDatabaseUrl = databaseUrl || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking';
             
             console.log('Production mode - Database URL configured');
             console.log('NODE_ENV:', process.env.NODE_ENV);
