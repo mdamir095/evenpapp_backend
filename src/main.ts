@@ -13,8 +13,20 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  // Configure multer for file uploads
-  app.use(multer().any());
+  // Configure multer for file uploads with proper options
+  app.use(multer({
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(null, false);
+      }
+    }
+  }).any());
 
   app.useGlobalPipes(new ValidationPipe({
     validationError: {
