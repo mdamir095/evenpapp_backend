@@ -9,11 +9,15 @@ import { AwsModule } from '@core/aws/aws.module';
 import { UserFeaturePermissionModule } from '@modules/user-feature-permission/user-feature-permission.module';
 import { FormModule } from '@modules/form/form.module';
 import { SimpleEmailService } from '@shared/email/simple-email.service';
+import { RobustEmailService } from '@shared/email/robust-email.service';
+import { WebhookEmailService } from '@shared/email/webhook-email.service';
 @Module({
     controllers: [UserController],
     providers: [
         UserService,
-        SimpleEmailService
+        SimpleEmailService,
+        RobustEmailService,
+        WebhookEmailService
     ],
     exports: [
         UserService

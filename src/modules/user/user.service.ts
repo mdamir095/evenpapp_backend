@@ -33,6 +33,7 @@ import path from 'path';
 import fs from 'fs';
 import { SupabaseService } from '@shared/modules/supabase/supabase.service';
 import { SimpleEmailService } from '@shared/email/simple-email.service';
+import { RobustEmailService } from '@shared/email/robust-email.service';
 @Injectable()
 export class UserService {
   private generalConfig;
@@ -48,6 +49,7 @@ export class UserService {
     private readonly awsS3Service: AwsS3Service,
     private readonly supabaseService: SupabaseService,
     private readonly simpleEmailService: SimpleEmailService,
+    private readonly robustEmailService: RobustEmailService,
   ) {
     this.generalConfig = this.configService.get('general');
     this.jwtConfig = this.configService.get('jwt');
@@ -262,44 +264,19 @@ export class UserService {
     user.expireAt = expiresAt;
     await this.userRepository.save(user);
 
-    try {
-      console.log(`Attempting to send OTP email to ${email}...`);
-      await this.mailerService.sendMail({
-        to: email,
-        subject: 'Your OTP Code',
-        text: `Your OTP is ${otp}`,
-      });
-      console.log(`✅ OTP sent successfully to ${email}: ${otp}`);
-    } catch (error) {
-      console.error('❌ Primary email service failed:', error.message);
-      console.error('Error details:', {
-        code: error.code,
-        command: error.command,
-        response: error.response
-      });
-      
-      // Try fallback email service
-      console.log('🔄 Trying fallback email service...');
-      try {
-        const fallbackSuccess = await this.simpleEmailService.sendSimpleEmail(
-          email,
-          'Your OTP Code',
-          `Your OTP is ${otp}`
-        );
-        
-        if (fallbackSuccess) {
-          console.log(`✅ Fallback email service succeeded for ${email}: ${otp}`);
-        } else {
-          console.log(`📝 OTP for ${email}: ${otp} (All email services unavailable)`);
-        }
-      } catch (fallbackError) {
-        console.error('❌ Fallback email service also failed:', fallbackError.message);
-        console.log(`📝 OTP for ${email}: ${otp} (All email services unavailable)`);
-      }
-      
+    // Use robust email service with multiple fallback strategies
+    console.log(`📧 Sending OTP email to ${email} using robust email service...`);
+    const emailSent = await this.robustEmailService.sendEmail(
+      email,
+      'Your OTP Code',
+      `Your OTP is ${otp}`
+    );
+    
+    if (emailSent) {
+      console.log(`✅ OTP email sent successfully to ${email}: ${otp}`);
+    } else {
+      console.log(`📝 OTP for ${email}: ${otp} (Email delivery failed, but OTP is available in logs)`);
       console.log('📧 User can use this OTP to verify their account manually');
-      // Don't throw error, just log it and continue
-      // This allows the OTP to be saved even if email fails
     }
 
     return { message: 'OTP sent' };
