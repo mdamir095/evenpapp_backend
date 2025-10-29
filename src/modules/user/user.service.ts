@@ -31,6 +31,7 @@ import { ResetPasswordMobileDto } from '@modules/auth/dto/request/reset-password
 import { CreateEnterpriseUserDto } from './dto/create-enterprise-user.dto';
 import path from 'path';
 import fs from 'fs';
+import { SupabaseService } from '@shared/modules/supabase/supabase.service';
 @Injectable()
 export class UserService {
   private generalConfig;
@@ -1175,16 +1176,25 @@ export class UserService {
     const fileName = `${uuidv4()}.${ext}`;
     let imageUrl: any = '';
     if (process.env.NODE_ENV === 'local') {
+      const { path, publicUrl } = await this.supabaseService.upload({
+        filePath: 'profile_' + fileName,
+        file: buffer,
+        contentType: mimetype,
+        bucket: 'profiles',
+      });
+      imageUrl = publicUrl;
+      console.log(imageUrl);
+      console.log(path);
       // For local development, save to local file system
-      const rootDir = path.resolve(__dirname, '..', '..', '..');
-      const dir = path.join(rootDir, 'uploads', 'profile');
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      const filePath = path.join(dir, fileName);
-      fs.writeFileSync(filePath, buffer);
-      // Return the URL path, not the file path
-      imageUrl = `/uploads/profile/${fileName}`;
+      // const rootDir = path.resolve(__dirname, '..', '..', '..');
+      // const dir = path.join(rootDir, 'uploads', 'profile');
+      // if (!fs.existsSync(dir)) {
+      //   fs.mkdirSync(dir, { recursive: true });
+      // }
+      // const filePath = path.join(dir, fileName);
+      // fs.writeFileSync(filePath, buffer);
+      // // Return the URL path, not the file path
+      // imageUrl = `/uploads/profile/${fileName}`;
     } else {
       // For production, upload to S3
       const awsUploadReqDto = {
@@ -1215,23 +1225,31 @@ export class UserService {
   async uploadFilesToS3Bucket(file: any): Promise<string> {
     if (process.env.NODE_ENV === 'local') {
       // For local development, save to local file system
-      const rootDir = path.resolve(__dirname, '..', '..', '..');
-      const dir = path.join(rootDir, 'uploads', 'profile');
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
+      // const rootDir = path.resolve(__dirname, '..', '..', '..');
+      // const dir = path.join(rootDir, 'uploads', 'profile');
+      // if (!fs.existsSync(dir)) {
+      //   fs.mkdirSync(dir, { recursive: true });
+      // }
       
       // Generate unique filename to avoid conflicts
       const timestamp = Date.now();
       const randomSuffix = Math.random().toString(36).substring(2, 8);
       const fileExtension = path.extname(file.originalname);
       const fileName = `profile_${timestamp}_${randomSuffix}${fileExtension}`;
-      const filePath = path.join(dir, fileName);
+      // const filePath = path.join(dir, fileName);
       
-      fs.writeFileSync(filePath, file.buffer);
-      
+      // fs.writeFileSync(filePath, file.buffer);
+
+      const uploadResult = await this.supabaseService.upload({
+        filePath: fileName,
+        file: file.buffer,
+        contentType: file.mimetype,
+        bucket: 'profiles',
+      });
+      console.log(uploadResult);
+      return uploadResult.publicUrl || '';
       // Return the URL path, not the file path
-      return `/uploads/profile/${fileName}`;
+      // return `/uploads/profile/${fileName}`;
     } else {
       const awsUploadReqDto = {
         Bucket: this.awsConfig.bucketName,

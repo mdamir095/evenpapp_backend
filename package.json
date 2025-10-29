@@ -71,7 +71,8 @@
     "rxjs": "^7.8.1",
     "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.20",
-    "uniqid": "^5.4.0"
+    "uniqid": "^5.4.0",
+    "@supabase/supabase-js": "^2.49.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.0.0",

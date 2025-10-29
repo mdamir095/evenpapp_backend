@@ -1,4 +1,5 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { SupabaseModule } from '@shared/modules/supabase/supabase.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -200,7 +201,8 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
     MealTypeModule,
     CuisineModule,
     ServingStyleModule,
-    AdditionalServiceModule
+    AdditionalServiceModule,
+    SupabaseModule
   ],
   controllers: [AppController],
   providers: [

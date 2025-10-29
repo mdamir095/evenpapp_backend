@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ProfileController } from './profile.controller';
 import { UserModule } from '@modules/user/user.module';
+import { SupabaseModule } from '@shared/modules/supabase/supabase.module';
 
 /**
  * Profile Module
@@ -16,7 +17,7 @@ import { UserModule } from '@modules/user/user.module';
  * Access Control: Universal (all authenticated users)
  */
 @Module({
-  imports: [UserModule],
+  imports: [UserModule, SupabaseModule],
   controllers: [ProfileController],
   providers: [],
   exports: [],
