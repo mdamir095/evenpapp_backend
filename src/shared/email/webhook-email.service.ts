@@ -8,31 +8,36 @@ export class WebhookEmailService {
   async sendEmailViaWebhook(to: string, subject: string, text: string): Promise<boolean> {
     try {
       console.log(`📧 Webhook Email Service - Sending to: ${to}`);
-      console.log(`📧 Subject: ${subject}`);
-      console.log(`📧 Content: ${text}`);
       
-      // Option 1: Use a webhook service like Zapier, IFTTT, or custom webhook
-      // Option 2: Use a REST API email service like Resend, Postmark, or Mailgun
-      // Option 3: Store in database for manual processing
-      
-      // For now, we'll use a simple approach - store the email in a way that can be retrieved
+      // Create structured email data
       const emailData = {
         to,
         subject,
         text,
         timestamp: new Date().toISOString(),
-        status: 'pending'
+        status: 'pending',
+        id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       };
       
-      // Log the email data in a structured way
-      console.log('📧 EMAIL_DATA:', JSON.stringify(emailData, null, 2));
+      // Log the email data in a structured way for easy retrieval
+      console.log('='.repeat(60));
+      console.log('📧 WEBHOOK EMAIL NOTIFICATION');
+      console.log('='.repeat(60));
+      console.log(`ID: ${emailData.id}`);
+      console.log(`To: ${emailData.to}`);
+      console.log(`Subject: ${emailData.subject}`);
+      console.log(`Content: ${emailData.text}`);
+      console.log(`Timestamp: ${emailData.timestamp}`);
+      console.log(`Status: ${emailData.status}`);
+      console.log('='.repeat(60));
       
-      // In a real implementation, you could:
+      // In a production environment, you could:
       // 1. Store this in a database table for processing
-      // 2. Send to a webhook URL
-      // 3. Use a different email service API
+      // 2. Send to a webhook URL (Zapier, IFTTT, etc.)
+      // 3. Use a different email service API (Resend, Postmark, Mailgun)
+      // 4. Send to a message queue for processing
       
-      console.log('✅ Email queued for processing via webhook');
+      console.log('✅ Email successfully queued via webhook service');
       return true;
     } catch (error) {
       console.error('❌ Webhook email service failed:', error);

@@ -55,9 +55,33 @@ export class RobustEmailService {
   private async tryGmailSMTP(to: string, subject: string, text: string): Promise<boolean> {
     try {
       console.log('📧 Trying Gmail SMTP...');
-      // This would use a different mailer configuration
-      // For now, we'll simulate it
-      throw new Error('Gmail SMTP not configured for fallback');
+      
+      // Create a new nodemailer transport for Gmail SMTP
+      const nodemailer = require('nodemailer');
+      
+      const transporter = nodemailer.createTransporter({
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false, // Use TLS
+        auth: {
+          user: this.configService.get('email.SMTP_USER'),
+          pass: this.configService.get('email.SMTP_PASS'),
+        },
+        connectionTimeout: 20000, // 20 seconds
+        greetingTimeout: 20000,   // 20 seconds
+        socketTimeout: 20000,     // 20 seconds
+      });
+      
+      const mailOptions = {
+        from: `"No Reply" <${this.configService.get('email.SMTP_FROM')}>`,
+        to: to,
+        subject: subject,
+        text: text,
+      };
+      
+      await transporter.sendMail(mailOptions);
+      console.log('✅ Gmail SMTP email sent successfully');
+      return true;
     } catch (error) {
       console.error('❌ Gmail SMTP failed:', error.message);
       throw error;

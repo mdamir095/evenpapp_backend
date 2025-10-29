@@ -201,12 +201,15 @@ export class UserService {
   }
 
   async signinJwt(result: any) {
-    // Use roles data from parameter
+    // Get user with populated roles and features
+    const userWithRoles = await this.findOneWithRoles(result.id);
+    
+    // Extract roles from the populated user data
     let roles: any = [];
-    if (result.roles) {
-      roles = result.roles;
+    if (userWithRoles && userWithRoles.roles) {
+      roles = userWithRoles.roles;
     } else if (result.roleIds && result.roleIds.length > 0) {
-      // If roles are not populated but roleIds exist, create a basic roles structure
+      // Fallback: If roles are not populated but roleIds exist, create a basic roles structure
       roles = result.roleIds.map((roleId: any) => ({
         id: roleId,
         name: 'USER', // Default role name
