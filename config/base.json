@@ -38,5 +38,11 @@
   },
   "general": {
     "frontendUrl": "http://localhost:5173"
+  },
+  "supabase": {
+    "url": "https://iydjmevmzhrnibonwmwr.supabase.co",
+    "serviceKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5ZGptZXZtemhybmlib253bXdyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MTU2MzA2MCwiZXhwIjoyMDc3MTM5MDYwfQ.sHwUVwHzqa1PvG2nknc3J-UP-hb-G26PE77b0ppGwkc",
+    "publicAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5ZGptZXZtemhybmlib253bXdyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE1NjMwNjAsImV4cCI6MjA3NzEzOTA2MH0.H9rB88nrmIBDHamw1O89GPRC1s4i15KADYnv2BFdCZo",
+    "storageBucket": "profiles"
   }
 }
