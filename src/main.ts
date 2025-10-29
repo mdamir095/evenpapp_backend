@@ -35,14 +35,26 @@ async function bootstrap() {
   app.enableCors({
     origin: function (origin, callback) {
       var whitelist = config.get<Array<string>>('cors');
-      //Okta sets Origin to null
-      if (origin && origin != 'null') {
-        if (whitelist?.find((x) => origin.endsWith(x))) {
-          callback(null, true);
-        } else {
-          callback(new Error(`Not allowed by CORS ${origin}`));
-        }
-      } else callback(null, true);
+      console.log('CORS check - Origin:', origin, 'Whitelist:', whitelist);
+      
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) {
+        console.log('CORS: Allowing request with no origin');
+        return callback(null, true);
+      }
+      
+      // Check if origin is in whitelist (exact match or ends with)
+      const isAllowed = whitelist?.some((allowedOrigin) => {
+        return origin === allowedOrigin || origin.endsWith(allowedOrigin);
+      });
+      
+      if (isAllowed) {
+        console.log('CORS: Allowing origin:', origin);
+        callback(null, true);
+      } else {
+        console.log('CORS: Blocking origin:', origin);
+        callback(new Error(`Not allowed by CORS ${origin}`));
+      }
     },
     "credentials": true
   });
