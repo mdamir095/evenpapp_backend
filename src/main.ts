@@ -7,10 +7,14 @@ import { LoggerService } from '@core/logger/logger.service';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EmailService } from '@shared/email/email.service';
 import { ResponseInterceptor } from '@common/interceptors/response/response.interceptor';
+import multer from 'multer';
 
 async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
+
+  // Configure multer for file uploads
+  app.use(multer().any());
 
   app.useGlobalPipes(new ValidationPipe({
     validationError: {

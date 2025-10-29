@@ -1,10 +1,14 @@
 const https = require('https');
 const FormData = require('form-data');
 
-async function testProfileUploadWithAuth() {
-  console.log('🔍 Testing profile upload with authentication...');
+async function testProfileUploadFix() {
+  console.log('🔍 Testing profile upload fix...');
   
   try {
+    // Wait for deployment
+    console.log('⏳ Waiting 30 seconds for deployment...');
+    await new Promise(resolve => setTimeout(resolve, 30000));
+    
     // First, login to get a valid token
     console.log('\n1️⃣ Getting authentication token:');
     const loginResponse = await fetch('https://evenpappbackend-production.up.railway.app/api/v1/auth/login', {
@@ -30,7 +34,7 @@ async function testProfileUploadWithAuth() {
     console.log('Token obtained:', token ? 'Yes' : 'No');
     
     // Now test the profile upload with the valid token
-    console.log('\n2️⃣ Testing profile upload with valid token:');
+    console.log('\n2️⃣ Testing profile upload with multer fix:');
     try {
       // Create a simple test image buffer (1x1 PNG)
       const testImageBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
@@ -56,8 +60,11 @@ async function testProfileUploadWithAuth() {
       
       if (uploadResponse.status === 200) {
         console.log('✅ Profile upload successful!');
+        console.log('✅ The multer dependency fix worked!');
+      } else if (uploadResponse.status === 500) {
+        console.log('❌ Still getting 500 error - there might be another issue');
       } else {
-        console.log('❌ Profile upload failed');
+        console.log('❌ Profile upload failed with status:', uploadResponse.status);
       }
       
     } catch (error) {
@@ -69,4 +76,4 @@ async function testProfileUploadWithAuth() {
   }
 }
 
-testProfileUploadWithAuth();
+testProfileUploadFix();
