@@ -123,7 +123,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             return {
               type: 'mongodb',
               url: finalDatabaseUrl,
-              database: 'event_booking', // Explicitly specify database name
+              database: 'eventbooking', // Explicitly specify database name
               entities: [
                 __dirname + '/**/*.mongo.entity{.ts,.js}',
                 __dirname + '/**/*.entity{.ts,.js}'
