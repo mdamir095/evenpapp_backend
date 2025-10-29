@@ -1241,47 +1241,68 @@ export class UserService {
   }
 
   async uploadFilesToS3Bucket(file: any): Promise<string> {
-    if (process.env.NODE_ENV === 'local') {
-      // For local development, save to local file system
-      // const rootDir = path.resolve(__dirname, '..', '..', '..');
-      // const dir = path.join(rootDir, 'uploads', 'profile');
-      // if (!fs.existsSync(dir)) {
-      //   fs.mkdirSync(dir, { recursive: true });
-      // }
+    try {
+      console.log('Upload method called, NODE_ENV:', process.env.NODE_ENV);
       
-      // Generate unique filename to avoid conflicts
-      const timestamp = Date.now();
-      const randomSuffix = Math.random().toString(36).substring(2, 8);
-      const fileExtension = path.extname(file.originalname);
-      const fileName = `profile_${timestamp}_${randomSuffix}${fileExtension}`;
-      // const filePath = path.join(dir, fileName);
-      
-      // fs.writeFileSync(filePath, file.buffer);
+      if (process.env.NODE_ENV === 'local') {
+        // For local development, use Supabase
+        console.log('Using Supabase for local upload');
+        
+        // Generate unique filename to avoid conflicts
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const fileExtension = path.extname(file.originalname);
+        const fileName = `profile_${timestamp}_${randomSuffix}${fileExtension}`;
 
-      const uploadResult = await this.supabaseService.upload({
-        filePath: fileName,
-        file: file.buffer,
-        contentType: file.mimetype,
-        bucket: 'profiles',
-      });
-      console.log(uploadResult);
-      return uploadResult.publicUrl || '';
-      // Return the URL path, not the file path
-      // return `/uploads/profile/${fileName}`;
-    } else {
-      const awsUploadReqDto = {
-        Bucket: this.awsConfig.bucketName,
-        Key:
-          this.awsConfig.bucketFolderName +
-          '/' +
-          this.awsConfig.bucketTempFolderName +
-          '/' +
-          file.originalname,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-      };
-      const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
-      return response?.Location || '';
+        const uploadResult = await this.supabaseService.upload({
+          filePath: fileName,
+          file: file.buffer,
+          contentType: file.mimetype,
+          bucket: 'profiles',
+        });
+        console.log('Supabase upload result:', uploadResult);
+        return uploadResult.publicUrl || '';
+      } else {
+        // For production, use AWS S3
+        console.log('Using AWS S3 for production upload');
+        
+        const awsUploadReqDto = {
+          Bucket: this.awsConfig.bucketName,
+          Key:
+            this.awsConfig.bucketFolderName +
+            '/' +
+            this.awsConfig.bucketTempFolderName +
+            '/' +
+            file.originalname,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        };
+        const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
+        console.log('AWS S3 upload result:', response);
+        return response?.Location || '';
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      // Fallback to Supabase if AWS fails
+      try {
+        console.log('Falling back to Supabase upload');
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 8);
+        const fileExtension = path.extname(file.originalname);
+        const fileName = `profile_${timestamp}_${randomSuffix}${fileExtension}`;
+
+        const uploadResult = await this.supabaseService.upload({
+          filePath: fileName,
+          file: file.buffer,
+          contentType: file.mimetype,
+          bucket: 'profiles',
+        });
+        console.log('Supabase fallback upload result:', uploadResult);
+        return uploadResult.publicUrl || '';
+      } catch (fallbackError) {
+        console.error('Fallback upload also failed:', fallbackError);
+        throw new Error('File upload failed: ' + fallbackError.message);
+      }
     }
   }
 
