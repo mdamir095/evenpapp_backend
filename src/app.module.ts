@@ -64,24 +64,55 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
         const isProduction = process.env.NODE_ENV === 'production';
         
         if (isProduction) {
-          // Use SendGrid for production
-          return {
-            transport: {
-              host: 'smtp.sendgrid.net',
-              port: 587,
-              secure: false, // Use TLS
-              auth: {
-                user: 'apikey',
-                pass: configService.get<string>('sendGrid.apiKey'),
+          // Try SendGrid first, fallback to Gmail SMTP
+          const sendGridApiKey = configService.get<string>('sendGrid.apiKey');
+          
+          if (sendGridApiKey && sendGridApiKey.length > 10) {
+            console.log('Using SendGrid for email service');
+            return {
+              transport: {
+                host: 'smtp.sendgrid.net',
+                port: 587,
+                secure: false, // Use TLS
+                auth: {
+                  user: 'apikey',
+                  pass: sendGridApiKey,
+                },
+                connectionTimeout: 15000, // 15 seconds
+                greetingTimeout: 15000,   // 15 seconds
+                socketTimeout: 15000,     // 15 seconds
+                pool: true,
+                maxConnections: 3,
+                maxMessages: 50,
               },
-              connectionTimeout: 10000, // 10 seconds
-              greetingTimeout: 10000,   // 10 seconds
-              socketTimeout: 10000,     // 10 seconds
-            },
-            defaults: {
-              from: configService.get<string>('sendGrid.fromEmail'),
-            },
-          };
+              defaults: {
+                from: configService.get<string>('sendGrid.fromEmail'),
+              },
+            };
+          } else {
+            console.log('SendGrid API key not found, using Gmail SMTP fallback');
+            // Fallback to Gmail SMTP
+            return {
+              transport: {
+                host: 'smtp.gmail.com',
+                port: 587,
+                secure: false,
+                auth: {
+                  user: configService.get('email.SMTP_USER'),
+                  pass: configService.get('email.SMTP_PASS'),
+                },
+                connectionTimeout: 20000, // 20 seconds
+                greetingTimeout: 20000,   // 20 seconds
+                socketTimeout: 20000,     // 20 seconds
+                pool: true,
+                maxConnections: 3,
+                maxMessages: 50,
+              },
+              defaults: {
+                from: `"No Reply" <${configService.get('email.SMTP_FROM')}>`,
+              },
+            };
+          }
         } else {
           // Use Gmail SMTP for development with better timeout settings
           return {

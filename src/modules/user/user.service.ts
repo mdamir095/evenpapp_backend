@@ -32,6 +32,7 @@ import { CreateEnterpriseUserDto } from './dto/create-enterprise-user.dto';
 import path from 'path';
 import fs from 'fs';
 import { SupabaseService } from '@shared/modules/supabase/supabase.service';
+import { SimpleEmailService } from '@shared/email/simple-email.service';
 @Injectable()
 export class UserService {
   private generalConfig;
@@ -46,6 +47,7 @@ export class UserService {
     private readonly mailerService: MailerService,
     private readonly awsS3Service: AwsS3Service,
     private readonly supabaseService: SupabaseService,
+    private readonly simpleEmailService: SimpleEmailService,
   ) {
     this.generalConfig = this.configService.get('general');
     this.jwtConfig = this.configService.get('jwt');
@@ -269,13 +271,32 @@ export class UserService {
       });
       console.log(`✅ OTP sent successfully to ${email}: ${otp}`);
     } catch (error) {
-      console.error('❌ Email sending failed:', error.message);
+      console.error('❌ Primary email service failed:', error.message);
       console.error('Error details:', {
         code: error.code,
         command: error.command,
         response: error.response
       });
-      console.log(`📝 OTP for ${email}: ${otp} (Email service unavailable)`);
+      
+      // Try fallback email service
+      console.log('🔄 Trying fallback email service...');
+      try {
+        const fallbackSuccess = await this.simpleEmailService.sendSimpleEmail(
+          email,
+          'Your OTP Code',
+          `Your OTP is ${otp}`
+        );
+        
+        if (fallbackSuccess) {
+          console.log(`✅ Fallback email service succeeded for ${email}: ${otp}`);
+        } else {
+          console.log(`📝 OTP for ${email}: ${otp} (All email services unavailable)`);
+        }
+      } catch (fallbackError) {
+        console.error('❌ Fallback email service also failed:', fallbackError.message);
+        console.log(`📝 OTP for ${email}: ${otp} (All email services unavailable)`);
+      }
+      
       console.log('📧 User can use this OTP to verify their account manually');
       // Don't throw error, just log it and continue
       // This allows the OTP to be saved even if email fails
