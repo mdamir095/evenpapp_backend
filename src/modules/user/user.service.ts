@@ -1137,11 +1137,11 @@ export class UserService {
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
-    const { currentPassword, newPassword } = dto;
+    const { currentPassword, newPassword, confirmPassword } = dto;
 
-    // if (newPassword !== confirmPassword) {
-    //   throw new BadRequestException('New password and confirm password do not match');
-    // }
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException('New password and confirm password do not match');
+    }
 
     const user = await this.userRepository.findOne({
       where: { _id: new ObjectId(userId) },

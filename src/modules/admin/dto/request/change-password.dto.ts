@@ -1,5 +1,18 @@
-import { IsString, MinLength, Matches } from 'class-validator';
+import { IsString, MinLength, Matches, Validate, ValidatorConstraint, ValidatorConstraintInterface, ValidationArguments } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+@ValidatorConstraint({ name: 'passwordMatch', async: false })
+export class PasswordMatchConstraint implements ValidatorConstraintInterface {
+  validate(confirmPassword: string, args: ValidationArguments) {
+    const [relatedPropertyName] = args.constraints;
+    const relatedValue = (args.object as any)[relatedPropertyName];
+    return confirmPassword === relatedValue;
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return 'New password and confirm password do not match';
+  }
+}
 
 export class ChangePasswordDto {
   @ApiProperty({ example: 'OldPassword@123' })
@@ -20,5 +33,6 @@ export class ChangePasswordDto {
 
   @ApiProperty({ example: 'NewPassword@123' })
   @IsString()
+  @Validate(PasswordMatchConstraint, ['newPassword'])
   confirmPassword: string;
 }
