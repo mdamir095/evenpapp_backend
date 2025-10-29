@@ -9,7 +9,7 @@ export class RailwayDatabaseModule {
       imports: [
         TypeOrmModule.forRoot({
           type: 'mongodb',
-          url: process.env.DATABASE_URL || 'mongodb+srv://shiv:*****@eventbooking.4hxsvht.mongodb.net',
+          url: process.env.DATABASE_URL || 'mongodb+srv://shiv:*****@event_booking.4hxsvht.mongodb.net',
           entities: [__dirname + '/../**/*.entity{.ts,.js}'],
           autoLoadEntities: true,
           synchronize: false,
