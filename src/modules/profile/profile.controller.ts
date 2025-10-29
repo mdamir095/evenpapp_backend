@@ -118,19 +118,7 @@ export class ProfileController {
     summary: 'Upload profile image file',
     description: 'Uploads a profile image file (PNG, JPEG, JPG). Accessible to all user types.'
   })
-  @UseInterceptors(FileInterceptor('file', {
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit
-    },
-    fileFilter: (req, file, cb) => {
-      const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg'];
-      if (allowedMimeTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(null, false);
-      }
-    }
-  }))
+  @UseInterceptors(FileInterceptor('file'))
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -156,9 +144,15 @@ export class ProfileController {
     description: 'Unauthorized - Authentication required' 
   })
   async uploadFile(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
+    console.log('Profile upload endpoint called');
+    console.log('File received:', !!file);
+    console.log('Request body keys:', Object.keys(req.body || {}));
+    console.log('Request files:', req.files);
+    
     const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg'];
     
     if (!file) {
+      console.log('No file uploaded - throwing error');
       throw new BadRequestException('No file uploaded');
     }
 
