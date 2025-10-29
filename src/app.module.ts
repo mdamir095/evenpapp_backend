@@ -101,7 +101,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             const databaseUrl = envDatabaseUrl || configDatabaseUrl;
             
             // Force use the correct database URL if config is not working
-            const finalDatabaseUrl = databaseUrl || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/?retryWrites=true&w=majority&appName=EventBooking';
+            const finalDatabaseUrl = databaseUrl || 'mongodb+srv://shiv:Admin@123@eventbooking.4hxsvht.mongodb.net/event_booking?retryWrites=true&w=majority&appName=EventBooking';
             
             console.log('Production mode - Database URL configured');
             console.log('NODE_ENV:', process.env.NODE_ENV);
@@ -110,6 +110,12 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             console.log('Final database URL source:', envDatabaseUrl ? 'Environment Variable' : (configDatabaseUrl ? 'Config File' : 'Fallback'));
             console.log('Using database URL:', finalDatabaseUrl ? 'Set' : 'Not set');
             console.log('Database URL preview:', finalDatabaseUrl ? finalDatabaseUrl.substring(0, 30) + '...' : 'Not available');
+            
+            // Log the actual database URL being used (masked)
+            if (finalDatabaseUrl) {
+              const maskedUrl = finalDatabaseUrl.replace(/\/\/[^:]+:[^@]+@/, '//***:***@');
+              console.log('Actual database URL being used:', maskedUrl);
+            }
             
             // Log other important environment variables
             console.log('PORT:', process.env.PORT || 'Not set');
@@ -123,7 +129,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
             return {
               type: 'mongodb',
               url: finalDatabaseUrl,
-              database: 'eventbooking', // Explicitly specify database name
+              database: 'event_booking', // Explicitly specify database name
               entities: [
                 __dirname + '/**/*.mongo.entity{.ts,.js}',
                 __dirname + '/**/*.entity{.ts,.js}'
