@@ -23,12 +23,18 @@ import * as hbs from 'handlebars';
         return {
           transport: {
             host: 'smtp.sendgrid.net',
-            port: 465, // or 465 for SSL
-            secure: true, // Set to true for SSL port (465)
+            port: 587, // Use TLS port instead of SSL
+            secure: false, // Use TLS instead of SSL
             auth: {
               user: 'apikey',
               pass: configService.get<string>('sendGrid.apiKey'),
             },
+            connectionTimeout: 10000, // 10 seconds
+            greetingTimeout: 10000,   // 10 seconds
+            socketTimeout: 10000,     // 10 seconds
+            pool: true,               // Use connection pooling
+            maxConnections: 5,        // Max connections in pool
+            maxMessages: 100,         // Max messages per connection
           },
           defaults: {
             from: configService.get<string>('sendGrid.fromEmail'),

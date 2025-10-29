@@ -59,21 +59,53 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
           serveRoot: '/uploads/quotation',   // <- serve from this route
         }),
       ],
-      useFactory: async (configService: ConfigService) => ({
-        transport: {
-          host: configService.get('email.SMTP_HOST'), // e.g., 'smtp.gmail.com'
-          port: configService.get('email.SMTP_PORT'), // e.g., 465 for SSL, 587 for TLS
-          secure: configService.get('email.SMTP_SECURE') === 'false', // true for 465, false for 587
-          auth: {
-            user: configService.get('email.SMTP_USER'),
-            pass: configService.get('email.SMTP_PASS'),
-          },
-        },
-        defaults: {
-          from: `"No Reply" <${configService.get('email.SMTP_FROM')}>`,
-        },
-        // Optionally, add template config here
-      }),
+      useFactory: async (configService: ConfigService) => {
+        // Use SendGrid for production, Gmail SMTP as fallback
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        if (isProduction) {
+          // Use SendGrid for production
+          return {
+            transport: {
+              host: 'smtp.sendgrid.net',
+              port: 587,
+              secure: false, // Use TLS
+              auth: {
+                user: 'apikey',
+                pass: configService.get<string>('sendGrid.apiKey'),
+              },
+              connectionTimeout: 10000, // 10 seconds
+              greetingTimeout: 10000,   // 10 seconds
+              socketTimeout: 10000,     // 10 seconds
+            },
+            defaults: {
+              from: configService.get<string>('sendGrid.fromEmail'),
+            },
+          };
+        } else {
+          // Use Gmail SMTP for development with better timeout settings
+          return {
+            transport: {
+              host: configService.get('email.SMTP_HOST'),
+              port: parseInt(configService.get('email.SMTP_PORT') || '587'),
+              secure: configService.get('email.SMTP_SECURE') === 'true',
+              auth: {
+                user: configService.get('email.SMTP_USER'),
+                pass: configService.get('email.SMTP_PASS'),
+              },
+              connectionTimeout: 15000, // 15 seconds
+              greetingTimeout: 15000,   // 15 seconds
+              socketTimeout: 15000,     // 15 seconds
+              pool: true,               // Use connection pooling
+              maxConnections: 5,        // Max connections in pool
+              maxMessages: 100,         // Max messages per connection
+            },
+            defaults: {
+              from: `"No Reply" <${configService.get('email.SMTP_FROM')}>`,
+            },
+          };
+        }
+      },
       inject: [ConfigService],
     }),
     ConfigModule.forRoot({

@@ -99,15 +99,22 @@ export class UserService {
     await this.userRepository.save(user);
     
     try {
+      console.log(`Attempting to send OTP email to ${body.email}...`);
       await this.mailerService.sendMail({
         to: body.email,
         subject: 'Your OTP Code',
         text: `Your OTP is ${otp}`,
       });
-      console.log(`Signup OTP sent to ${body.email}: ${otp}`);
+      console.log(`✅ Signup OTP sent successfully to ${body.email}: ${otp}`);
     } catch (error) {
-      console.error('Email sending failed during signup:', error);
-      console.log(`Signup OTP for ${body.email}: ${otp} (Email service unavailable)`);
+      console.error('❌ Email sending failed during signup:', error.message);
+      console.error('Error details:', {
+        code: error.code,
+        command: error.command,
+        response: error.response
+      });
+      console.log(`📝 Signup OTP for ${body.email}: ${otp} (Email service unavailable)`);
+      console.log('📧 User can use this OTP to verify their account manually');
       // Don't throw error, just log it and continue
       // This allows the user to be created even if email fails
     }
@@ -254,15 +261,22 @@ export class UserService {
     await this.userRepository.save(user);
 
     try {
+      console.log(`Attempting to send OTP email to ${email}...`);
       await this.mailerService.sendMail({
         to: email,
         subject: 'Your OTP Code',
         text: `Your OTP is ${otp}`,
       });
-      console.log(`OTP sent to ${email}: ${otp}`);
+      console.log(`✅ OTP sent successfully to ${email}: ${otp}`);
     } catch (error) {
-      console.error('Email sending failed:', error);
-      console.log(`OTP for ${email}: ${otp} (Email service unavailable)`);
+      console.error('❌ Email sending failed:', error.message);
+      console.error('Error details:', {
+        code: error.code,
+        command: error.command,
+        response: error.response
+      });
+      console.log(`📝 OTP for ${email}: ${otp} (Email service unavailable)`);
+      console.log('📧 User can use this OTP to verify their account manually');
       // Don't throw error, just log it and continue
       // This allows the OTP to be saved even if email fails
     }
