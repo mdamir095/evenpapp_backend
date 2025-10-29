@@ -97,11 +97,20 @@ export class UserService {
     });
 
     await this.userRepository.save(user);
-    await this.mailerService.sendMail({
-      to: body.email,
-      subject: 'Your OTP Code',
-      text: `Your OTP is ${otp}`,
-    });
+    
+    try {
+      await this.mailerService.sendMail({
+        to: body.email,
+        subject: 'Your OTP Code',
+        text: `Your OTP is ${otp}`,
+      });
+      console.log(`Signup OTP sent to ${body.email}: ${otp}`);
+    } catch (error) {
+      console.error('Email sending failed during signup:', error);
+      console.log(`Signup OTP for ${body.email}: ${otp} (Email service unavailable)`);
+      // Don't throw error, just log it and continue
+      // This allows the user to be created even if email fails
+    }
 
     return { message: 'User registered successfully' };
   }

@@ -41,8 +41,14 @@ export class AuthController {
     @HttpCode(200)
     @ApiBody({ type: SignUpReqDto })
     @ApiResponse({ status: 200, description: 'Signup successful' })
+    @ApiResponse({ status: 500, description: 'Internal Server Error' })
     public async signUp(@Body() payload: SignUpReqDto) {
-        return await this.authService.signUp(payload);
+        try {
+            return await this.authService.signUp(payload);
+        } catch (error) {
+            console.error('Signup error:', error);
+            throw error;
+        }
     }
     
     @Post('login')
