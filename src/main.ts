@@ -7,26 +7,12 @@ import { LoggerService } from '@core/logger/logger.service';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EmailService } from '@shared/email/email.service';
 import { ResponseInterceptor } from '@common/interceptors/response/response.interceptor';
-import multer from 'multer';
 
 async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
-  // Configure multer for file uploads with proper options
-  app.use(multer({
-    limits: {
-      fileSize: 10 * 1024 * 1024, // 10MB limit
-    },
-    fileFilter: (req, file, cb) => {
-      const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg'];
-      if (allowedMimeTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(null, false);
-      }
-    }
-  }).any());
+  // Note: Multer configuration is handled by FileInterceptor in controllers
 
   app.useGlobalPipes(new ValidationPipe({
     validationError: {

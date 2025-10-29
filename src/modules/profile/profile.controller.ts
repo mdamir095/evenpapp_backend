@@ -118,7 +118,19 @@ export class ProfileController {
     summary: 'Upload profile image file',
     description: 'Uploads a profile image file (PNG, JPEG, JPG). Accessible to all user types.'
   })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(null, false);
+      }
+    }
+  }))
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
