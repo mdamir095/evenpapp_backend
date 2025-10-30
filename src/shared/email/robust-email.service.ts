@@ -24,13 +24,13 @@ export class RobustEmailService {
 
   async sendEmail(to: string, subject: string, text: string): Promise<boolean> {
     const strategies = [
-      () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery)
-      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass)
-      () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized)
-      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (fallback)
-      () => this.tryRailwayEmail(to, subject, text), // Railway-specific service
-      () => this.tryWebhook(to, subject, text), // Webhook logging
-      () => this.tryConsoleLog(to, subject, text) // Console logging
+      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - PRIMARY
+      () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
+      () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
+      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - FALLBACK
+      () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
+      () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
+      () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
     ];
 
     for (let i = 0; i < strategies.length; i++) {
