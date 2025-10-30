@@ -2,6 +2,7 @@ import { Body, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Controller } from '@nestjs/common';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthService } from './auth.service';
+import { UserService } from '@modules/user/user.service';
 import { LoggerService } from '@core/logger/logger.service';
 import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse } from '@nestjs/swagger';
@@ -29,8 +30,8 @@ export class AuthController {
     private jwtConfig;
     constructor(
         private readonly authService: AuthService,
+        private readonly userService: UserService,
         private readonly loggerService: LoggerService,
-
         private readonly configService: ConfigService,
     ) {
         this.jwtConfig = this.configService.get('jwt');
@@ -80,7 +81,7 @@ export class AuthController {
     @ApiResponse({ status: 500, description: 'Internal Server Error' })
     async sendOtp(@Body() dto: SendOtpDto) {
       try {
-        return await this.authService.sendOtp(dto.email);
+        return await this.userService.sendOtp(dto.email);
       } catch (error) {
         console.error('Send OTP error:', error);
         throw error;
