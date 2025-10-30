@@ -15,6 +15,7 @@ import { HttpEmailService } from '@shared/email/http-email.service';
 import { SmtpOnlyEmailService } from '@shared/email/smtp-only-email.service';
 import { RailwayEmailService } from '@shared/email/railway-email.service';
 import { RailwayDirectEmailService } from '@shared/email/railway-direct-email.service';
+import { ResendEmailService } from '@shared/email/resend-email.service';
 @Module({
     controllers: [UserController],
     providers: [
@@ -25,7 +26,8 @@ import { RailwayDirectEmailService } from '@shared/email/railway-direct-email.se
         HttpEmailService,
         SmtpOnlyEmailService,
         RailwayEmailService,
-        RailwayDirectEmailService
+        RailwayDirectEmailService,
+        ResendEmailService
     ],
     exports: [
         UserService

@@ -6,6 +6,7 @@ import { HttpEmailService } from './http-email.service';
 import { SmtpOnlyEmailService } from './smtp-only-email.service';
 import { RailwayEmailService } from './railway-email.service';
 import { RailwayDirectEmailService } from './railway-direct-email.service';
+import { ResendEmailService } from './resend-email.service';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
@@ -17,11 +18,13 @@ export class RobustEmailService {
     private readonly httpEmailService: HttpEmailService,
     private readonly smtpOnlyEmailService: SmtpOnlyEmailService,
     private readonly railwayEmailService: RailwayEmailService,
-    private readonly railwayDirectEmailService: RailwayDirectEmailService
+    private readonly railwayDirectEmailService: RailwayDirectEmailService,
+    private readonly resendEmailService: ResendEmailService
   ) {}
 
   async sendEmail(to: string, subject: string, text: string): Promise<boolean> {
     const strategies = [
+      () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery)
       () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass)
       () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized)
       () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (fallback)
@@ -46,6 +49,16 @@ export class RobustEmailService {
 
     console.error('❌ All email strategies failed');
     return false;
+  }
+
+  private async tryResend(to: string, subject: string, text: string): Promise<boolean> {
+    try {
+      console.log('📧 Trying Resend Email Service...');
+      return await this.resendEmailService.sendEmail(to, subject, text);
+    } catch (error) {
+      console.error('❌ Resend Email Service failed:', error.message);
+      throw error;
+    }
   }
 
   private async tryRailwayDirect(to: string, subject: string, text: string): Promise<boolean> {
