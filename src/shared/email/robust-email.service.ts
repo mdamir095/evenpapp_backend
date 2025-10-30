@@ -29,14 +29,13 @@ export class RobustEmailService {
     
     let strategies;
     
-    // Prioritize Railway Direct Email Service for reliable delivery
-    // This bypasses SMTP issues and provides guaranteed email logging
+    // Prioritize Gmail SMTP now that valid app password is provided
     strategies = [
-      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - PRIMARY
-      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - FALLBACK
+      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - PRIMARY
       () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
-      () => this.trySendGridAPI(to, subject, text), // SendGrid API (Real delivery) - FALLBACK
       () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
+      () => this.trySendGridAPI(to, subject, text), // SendGrid API (Real delivery) - FALLBACK
+      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - BACKUP
       () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
       () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
       () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
@@ -112,7 +111,7 @@ export class RobustEmailService {
       // Try environment variables first, then config
       const smtpUser = process.env.SMTP_USER || this.configService.get('email.SMTP_USER');
       const smtpPass = process.env.SMTP_PASS || this.configService.get('email.SMTP_PASS');
-      const smtpFrom = process.env.SMTP_FROM || this.configService.get('email.SMTP_FROM');
+      let smtpFrom = process.env.SMTP_FROM || this.configService.get('email.SMTP_FROM') || smtpUser;
       
       console.log('📧 Gmail SMTP Config:', {
         user: smtpUser ? `${smtpUser.substring(0, 3)}***` : 'NOT_SET',
@@ -121,7 +120,7 @@ export class RobustEmailService {
         source: process.env.SMTP_USER ? 'ENV_VAR' : 'CONFIG_FILE'
       });
       
-      if (!smtpUser || !smtpPass || !smtpFrom) {
+      if (!smtpUser || !smtpPass) {
         throw new Error('Gmail SMTP credentials not configured');
       }
       
