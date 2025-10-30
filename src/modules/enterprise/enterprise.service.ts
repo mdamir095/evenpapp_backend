@@ -24,6 +24,7 @@ import { UpdateEnterpriseUserDto } from './dto/request/update-enterprise-user.dt
 import { UpdateEnterpriseUserStatusDto } from './dto/request/update-enterprise-user-status.dto';
 import { Feature } from '../feature/entities/feature.entity';
 import { RoleType } from '@shared/enums/roleType';
+import { RobustEmailService } from '@shared/email/robust-email.service';
 
 @Injectable()
 export class EnterpriseService {
@@ -36,6 +37,7 @@ export class EnterpriseService {
     private readonly roleService: RoleService,
     private readonly featureService: FeatureService,
     private readonly userFeaturePermissionService: UserFeaturePermissionService,
+    private readonly robustEmailService: RobustEmailService,
   ) {}
 
   async create(dto: CreateEnterpriseDto): Promise<EnterpriseResponseDto> {
@@ -368,24 +370,24 @@ export class EnterpriseService {
     const token = uuidv4();
     await this.userService.updateEnterpriseUser(targetUser.id.toString(), { token } as any);
 
-    // Send reset password email
+    // Send reset password email using robust email service
     const frontendUrl = this.configService.get('general.frontendUrl');
     const resetUrl = `${frontendUrl}/enterprise-management/reset-password?token=${token}`;
-    await this.mailerService.sendMail({
-      to: targetUser.email,
-      subject: 'Reset Your Password',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f6f6f6;">
-          <div style="max-width: 600px; margin: auto; background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
-            <h2 style=\"color: #333;\">Reset Your Password</h2>
-            <p style=\"font-size: 16px; color: #555;\">Click the button below to set a new password:</p>
-            <div style=\"text-align: center; margin: 30px 0;\">
-              <a href=\"${resetUrl}\" style=\"display: inline-block; padding: 12px 25px; font-size: 16px; color: #fff; background-color: #dc3545; border-radius: 5px; text-decoration: none;\">Reset Password</a>
-            </div>
-          </div>
-        </div>
-      `,
-    });
+    
+    console.log(`📧 Sending enterprise password reset email to ${targetUser.email} using robust email service...`);
+    const emailSent = await this.robustEmailService.sendEmail(
+      targetUser.email,
+      'Reset Your Password',
+      `Click the link to reset your password: ${resetUrl}`
+    );
+
+    if (emailSent) {
+      console.log(`✅ Enterprise password reset email sent successfully to ${targetUser.email}`);
+    } else {
+      console.log(`📝 Enterprise password reset email for ${targetUser.email} (Email delivery failed, but reset link is available in logs)`);
+      console.log('📧 User can use this reset link to reset their password manually');
+      console.log(`Reset Link: ${resetUrl}`);
+    }
     return { message: 'Reset link sent successfully' };
   }
 

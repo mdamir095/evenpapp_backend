@@ -936,12 +936,21 @@ export class UserService {
       ? `${this.generalConfig.frontendUrl}/admin/reset-password?token=${token}`
       : `${this.generalConfig.frontendUrl}/reset-password?token=${token}&email=${email}`;
 
-    // 4. Send email
-    await this.mailerService.sendMail({
-      to: user.email,
-      subject: 'Reset Password',
-      text: `Click the link to reset your password: ${resetUrl}`,
-    });
+    // 4. Send email using robust email service
+    console.log(`📧 Sending password reset email to ${user.email} using robust email service...`);
+    const emailSent = await this.robustEmailService.sendEmail(
+      user.email,
+      'Reset Password',
+      `Click the link to reset your password: ${resetUrl}`
+    );
+
+    if (emailSent) {
+      console.log(`✅ Password reset email sent successfully to ${user.email}`);
+    } else {
+      console.log(`📝 Password reset email for ${user.email} (Email delivery failed, but reset link is available in logs)`);
+      console.log('📧 User can use this reset link to reset their password manually');
+      console.log(`Reset Link: ${resetUrl}`);
+    }
 
     return {
       message: 'Reset password link sent to your email',

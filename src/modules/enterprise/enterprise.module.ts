@@ -8,6 +8,10 @@ import { MailerModule } from '@nestjs-modules/mailer';
 import { RoleModule } from '@modules/role/role.module';
 import { UserFeaturePermissionModule } from '@modules/user-feature-permission/user-feature-permission.module';
 import { FeatureModule } from '@modules/feature/feature.module';
+import { RobustEmailService } from '@shared/email/robust-email.service';
+import { HttpEmailService } from '@shared/email/http-email.service';
+import { WebhookEmailService } from '@shared/email/webhook-email.service';
+import { SimpleEmailService } from '@shared/email/simple-email.service';
 
 
 @Module({
@@ -20,7 +24,13 @@ import { FeatureModule } from '@modules/feature/feature.module';
    
 ],
     controllers: [EnterpriseController],
-    providers: [EnterpriseService],
+    providers: [
+        EnterpriseService,
+        RobustEmailService,
+        HttpEmailService,
+        WebhookEmailService,
+        SimpleEmailService
+    ],
     exports: [EnterpriseService],
 })
 export class EnterpriseModule {}

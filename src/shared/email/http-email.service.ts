@@ -31,6 +31,12 @@ export class HttpEmailService {
       const sendGridApiKey = process.env.SENDGRID_API_KEY || this.configService.get('sendGrid.apiKey');
       const fromEmail = process.env.SENDGRID_FROM_EMAIL || this.configService.get('sendGrid.fromEmail');
       
+      console.log('📧 SendGrid API Config:', {
+        apiKey: sendGridApiKey ? `${sendGridApiKey.substring(0, 10)}...` : 'NOT_SET',
+        fromEmail: fromEmail ? `${fromEmail.substring(0, 3)}***` : 'NOT_SET',
+        source: process.env.SENDGRID_API_KEY ? 'ENV_VAR' : 'CONFIG_FILE'
+      });
+      
       if (!sendGridApiKey || !fromEmail) {
         throw new Error('SendGrid API credentials not configured');
       }
@@ -61,6 +67,20 @@ export class HttpEmailService {
         return true;
       } else {
         const errorText = await response.text();
+        console.log(`❌ SendGrid API failed: ${response.status} - ${errorText}`);
+        
+        // Handle specific error cases
+        if (response.status === 401) {
+          console.log('🔧 SendGrid API Key Issue:');
+          console.log('   - API key may be invalid, expired, or revoked');
+          console.log('   - Check SendGrid dashboard for key status');
+          console.log('   - Generate a new API key if needed');
+        } else if (response.status === 403) {
+          console.log('🔧 SendGrid API Permission Issue:');
+          console.log('   - API key may not have mail send permissions');
+          console.log('   - Check SendGrid account verification status');
+        }
+        
         throw new Error(`SendGrid API failed: ${response.status} - ${errorText}`);
       }
       
