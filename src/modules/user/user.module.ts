@@ -11,13 +11,15 @@ import { FormModule } from '@modules/form/form.module';
 import { SimpleEmailService } from '@shared/email/simple-email.service';
 import { RobustEmailService } from '@shared/email/robust-email.service';
 import { WebhookEmailService } from '@shared/email/webhook-email.service';
+import { HttpEmailService } from '@shared/email/http-email.service';
 @Module({
     controllers: [UserController],
     providers: [
         UserService,
         SimpleEmailService,
         RobustEmailService,
-        WebhookEmailService
+        WebhookEmailService,
+        HttpEmailService
     ],
     exports: [
         UserService
