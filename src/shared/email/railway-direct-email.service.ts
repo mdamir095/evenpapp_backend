@@ -22,7 +22,22 @@ export class RailwayDirectEmailService {
         service: 'RAILWAY_DIRECT',
         priority: 'high',
         source: 'NESTJS_BACKEND',
-        from: 'akhil@whiz-solutions.com' // Using your email as sender
+        from: 'ajay@whiz-solutions.com', // Using your email as sender
+        port: 587,
+        secure: false,
+        auth: {
+          user: 'ajay@whiz-solutions.com',
+          pass: 'gdqvxrxollckctpb'
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 15000,
+        pool: true,
+        maxConnections: 3,
+        maxMessages: 50,
+        tls: {
+          rejectUnauthorized: false
+        }
       };
 
       console.log('='.repeat(70));
