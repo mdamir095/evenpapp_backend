@@ -16,11 +16,11 @@ export class RobustEmailService {
 
   async sendEmail(to: string, subject: string, text: string): Promise<boolean> {
     const strategies = [
-      () => this.trySendGrid(to, subject, text),
-      () => this.tryGmailSMTP(to, subject, text), // Enhanced Gmail SMTP with multiple configs
-      () => this.tryHttpEmail(to, subject, text), // HTTP-based email fallback
-      () => this.tryWebhook(to, subject, text),
-      () => this.tryConsoleLog(to, subject, text)
+      () => this.tryHttpEmail(to, subject, text), // HTTP-based email (SendGrid API + fallback)
+      () => this.trySendGrid(to, subject, text), // SMTP SendGrid (may timeout)
+      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (likely to timeout on Railway)
+      () => this.tryWebhook(to, subject, text), // Webhook logging
+      () => this.tryConsoleLog(to, subject, text) // Console logging
     ];
 
     for (let i = 0; i < strategies.length; i++) {
