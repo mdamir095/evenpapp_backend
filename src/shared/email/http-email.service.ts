@@ -9,13 +9,7 @@ export class HttpEmailService {
     try {
       console.log('📧 Trying HTTP-based email service...');
       
-      // Try SendGrid API first (HTTP-based, not SMTP)
-      const sendGridSuccess = await this.trySendGridAPI(to, subject, text);
-      if (sendGridSuccess) {
-        return true;
-      }
-      
-      // Fallback to structured logging
+      // Skip SendGrid API, go directly to structured logging
       return await this.logEmailStructured(to, subject, text);
       
     } catch (error) {

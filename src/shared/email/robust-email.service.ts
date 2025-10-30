@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { MailerService } from '@nestjs-modules/mailer';
 import { WebhookEmailService } from './webhook-email.service';
 import { HttpEmailService } from './http-email.service';
+import { SmtpOnlyEmailService } from './smtp-only-email.service';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
@@ -11,14 +12,14 @@ export class RobustEmailService {
     private readonly configService: ConfigService,
     private readonly mailerService: MailerService,
     private readonly webhookEmailService: WebhookEmailService,
-    private readonly httpEmailService: HttpEmailService
+    private readonly httpEmailService: HttpEmailService,
+    private readonly smtpOnlyEmailService: SmtpOnlyEmailService
   ) {}
 
   async sendEmail(to: string, subject: string, text: string): Promise<boolean> {
     const strategies = [
-      () => this.tryHttpEmail(to, subject, text), // HTTP-based email (SendGrid API + fallback)
-      () => this.trySendGrid(to, subject, text), // SMTP SendGrid (may timeout)
-      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (likely to timeout on Railway)
+      () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized)
+      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (fallback)
       () => this.tryWebhook(to, subject, text), // Webhook logging
       () => this.tryConsoleLog(to, subject, text) // Console logging
     ];
@@ -39,6 +40,16 @@ export class RobustEmailService {
 
     console.error('❌ All email strategies failed');
     return false;
+  }
+
+  private async trySmtpOnly(to: string, subject: string, text: string): Promise<boolean> {
+    try {
+      console.log('📧 Trying SMTP-Only Service...');
+      return await this.smtpOnlyEmailService.sendEmail(to, subject, text);
+    } catch (error) {
+      console.error('❌ SMTP-Only Service failed:', error.message);
+      throw error;
+    }
   }
 
   private async trySendGrid(to: string, subject: string, text: string): Promise<boolean> {
@@ -76,37 +87,46 @@ export class RobustEmailService {
         throw new Error('Gmail SMTP credentials not configured');
       }
       
-      // Try multiple Gmail SMTP configurations
+      // Try multiple Gmail SMTP configurations with Railway-optimized settings
       const configs = [
         {
-          name: 'Gmail TLS (Port 587)',
+          name: 'Gmail TLS (Port 587) - Railway Optimized',
           host: 'smtp.gmail.com',
           port: 587,
-          secure: false,
+          secure: false, // Use TLS
           auth: { user: smtpUser, pass: smtpPass },
-          connectionTimeout: 15000,
-          greetingTimeout: 15000,
-          socketTimeout: 15000,
+          connectionTimeout: 30000, // Increased timeout for Railway
+          greetingTimeout: 30000,
+          socketTimeout: 30000,
+          tls: { rejectUnauthorized: false }, // Allow self-signed certificates
+          pool: true,
+          maxConnections: 1,
+          maxMessages: 1,
         },
         {
-          name: 'Gmail SSL (Port 465)',
+          name: 'Gmail SSL (Port 465) - Railway Optimized',
           host: 'smtp.gmail.com',
           port: 465,
           secure: true,
           auth: { user: smtpUser, pass: smtpPass },
-          connectionTimeout: 15000,
-          greetingTimeout: 15000,
-          socketTimeout: 15000,
+          connectionTimeout: 30000,
+          greetingTimeout: 30000,
+          socketTimeout: 30000,
+          tls: { rejectUnauthorized: false },
+          pool: true,
+          maxConnections: 1,
+          maxMessages: 1,
         },
         {
-          name: 'Gmail TLS (Port 25)',
+          name: 'Gmail TLS (Port 2525) - Alternative',
           host: 'smtp.gmail.com',
-          port: 25,
+          port: 2525,
           secure: false,
           auth: { user: smtpUser, pass: smtpPass },
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 10000,
+          connectionTimeout: 20000,
+          greetingTimeout: 20000,
+          socketTimeout: 20000,
+          tls: { rejectUnauthorized: false },
         }
       ];
       
