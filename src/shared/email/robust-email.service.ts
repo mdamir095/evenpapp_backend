@@ -29,16 +29,16 @@ export class RobustEmailService {
     
     let strategies;
     
-    // Prioritize Gmail SMTP now that valid app password is provided
+    // Prioritize HTTP providers first (work on Railway), then SMTP
     strategies = [
-      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - PRIMARY
-      () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
-      () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
-      () => this.trySendGridAPI(to, subject, text), // SendGrid API (Real delivery) - FALLBACK
-      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - BACKUP
-      () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
-      () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
-      () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
+      () => this.tryResend(to, subject, text), // Resend API (HTTP) - PRIMARY
+      () => this.trySendGridAPI(to, subject, text), // SendGrid API (HTTP) - FALLBACK
+      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP - FALLBACK
+      () => this.trySmtpOnly(to, subject, text), // SMTP variations - FALLBACK
+      () => this.tryRailwayDirect(to, subject, text), // Logging backup
+      () => this.tryRailwayEmail(to, subject, text), // Logging backup
+      () => this.tryWebhook(to, subject, text), // Logging backup
+      () => this.tryConsoleLog(to, subject, text) // Guaranteed logging
     ];
 
     for (let i = 0; i < strategies.length; i++) {

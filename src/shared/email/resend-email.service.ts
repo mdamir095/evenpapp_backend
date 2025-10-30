@@ -1,9 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Resend } from 'resend';
 
 @Injectable()
 export class ResendEmailService {
-  constructor(private readonly configService: ConfigService) {}
+  private resendClient?: Resend;
+
+  constructor(private readonly configService: ConfigService) {
+    const apiKey = process.env.RESEND_API_KEY || this.configService.get('resend.apiKey');
+    if (apiKey) {
+      this.resendClient = new Resend(apiKey);
+    }
+  }
 
   async sendEmail(to: string, subject: string, text: string): Promise<boolean> {
     try {
@@ -19,46 +27,30 @@ export class ResendEmailService {
         source: process.env.RESEND_API_KEY ? 'ENV_VAR' : 'CONFIG_FILE'
       });
       
-      if (!resendApiKey) {
+      if (!resendApiKey || !this.resendClient) {
         console.log('⚠️ Resend API key not configured, using fallback logging');
         return await this.logEmailFallback(to, subject, text);
       }
-
-      const emailData = {
+      console.log('📧 Sending email via Resend SDK...');
+      const { data, error } = await this.resendClient.emails.send({
         from: fromEmail,
         to: [to],
-        subject: subject,
-        text: text,
+        subject,
         html: `<div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f6f6f6;">
           <div style="max-width: 600px; margin: auto; background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
-            <h2 style="color: #333;">${subject}</h2>
-            <div style="font-size: 16px; color: #555; line-height: 1.6;">
-              ${text.replace(/\n/g, '<br>')}
-            </div>
+            <h2 style=\"color: #333;\">${subject}</h2>
+            <div style=\"font-size: 16px; color: #555; line-height: 1.6;\">${text.replace(/\n/g, '<br>')}</div>
           </div>
         </div>`
-      };
-
-      console.log('📧 Sending email via Resend API...');
-      
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(emailData)
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Resend email sent successfully:', result.id);
-        return true;
-      } else {
-        const errorText = await response.text();
-        console.log(`❌ Resend API failed: ${response.status} - ${errorText}`);
+      if (error) {
+        console.log('❌ Resend SDK error:', error);
         return await this.logEmailFallback(to, subject, text);
       }
+
+      console.log('✅ Resend email sent successfully:', data?.id || 'no-id');
+      return true;
       
     } catch (error) {
       console.error('❌ Resend Email Service failed:', error.message);
