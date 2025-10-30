@@ -1,9 +1,10 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Post, Body } from '@nestjs/common';
 import { AppService } from './app.service';
 import { LoggerService } from '@core/logger/logger.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { User } from '@modules/user/entities/user.entity';
+import { sendEmail } from './emailService';
 
 @Controller()
 export class AppController {
@@ -56,6 +57,20 @@ export class AppController {
         error: error.message,
         timestamp: new Date().toISOString()
       };
+    }
+  }
+
+  @Post('send-test')
+  async sendTestEmail(@Body() body: { to: string; subject?: string; html?: string }) {
+    try {
+      const result = await sendEmail(
+        body.to || 'user@example.com',
+        body.subject || 'Hello from Railway!',
+        body.html || '<strong>This email is powered by Resend 🚀</strong>'
+      );
+      return { success: true, result };
+    } catch (e) {
+      return { success: false, error: e.message };
     }
   }
 }
