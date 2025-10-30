@@ -23,15 +23,36 @@ export class RobustEmailService {
   ) {}
 
   async sendEmail(to: string, subject: string, text: string): Promise<boolean> {
-    const strategies = [
-      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - PRIMARY
-      () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
-      () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
-      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - FALLBACK
-      () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
-      () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
-      () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
-    ];
+    // Check if we're in production and have SendGrid configured
+    const isProduction = process.env.NODE_ENV === 'production';
+    const hasSendGrid = process.env.SENDGRID_API_KEY || this.configService.get('sendGrid.apiKey');
+    
+    let strategies;
+    
+    if (isProduction && hasSendGrid) {
+      // Production with SendGrid: Prioritize HTTP-based services
+      strategies = [
+        () => this.trySendGridAPI(to, subject, text), // SendGrid API (Real delivery) - PRIMARY
+        () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
+        () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - FALLBACK
+        () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - FALLBACK
+        () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
+        () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
+        () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
+        () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
+      ];
+    } else {
+      // Development or no SendGrid: Use Gmail SMTP first
+      strategies = [
+        () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - PRIMARY
+        () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
+        () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
+        () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - FALLBACK
+        () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
+        () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
+        () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
+      ];
+    }
 
     for (let i = 0; i < strategies.length; i++) {
       try {
@@ -240,6 +261,73 @@ export class RobustEmailService {
       return true;
     } catch (error) {
       console.error('❌ Console logging failed:', error.message);
+      throw error;
+    }
+  }
+
+  private async trySendGridAPI(to: string, subject: string, text: string): Promise<boolean> {
+    try {
+      console.log('📧 Trying SendGrid API...');
+      
+      const sendGridApiKey = process.env.SENDGRID_API_KEY || this.configService.get('sendGrid.apiKey');
+      const fromEmail = process.env.SENDGRID_FROM_EMAIL || this.configService.get('sendGrid.fromEmail');
+      
+      console.log('📧 SendGrid API Config:', {
+        apiKey: sendGridApiKey ? `${sendGridApiKey.substring(0, 10)}...` : 'NOT_SET',
+        fromEmail: fromEmail ? `${fromEmail.substring(0, 3)}***` : 'NOT_SET',
+        source: process.env.SENDGRID_API_KEY ? 'ENV_VAR' : 'CONFIG_FILE'
+      });
+      
+      if (!sendGridApiKey || !fromEmail) {
+        throw new Error('SendGrid API credentials not configured');
+      }
+
+      const emailData = {
+        personalizations: [{
+          to: [{ email: to }],
+          subject: subject
+        }],
+        from: { email: fromEmail },
+        content: [{
+          type: 'text/plain',
+          value: text
+        }]
+      };
+
+      console.log('📧 Sending email via SendGrid API...');
+      const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sendGridApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(emailData)
+      });
+
+      if (response.ok) {
+        console.log('✅ SendGrid API email sent successfully');
+        return true;
+      } else {
+        const errorText = await response.text();
+        console.log(`❌ SendGrid API failed: ${response.status} - ${errorText}`);
+        
+        // Handle specific error cases
+        if (response.status === 401) {
+          console.log('🔧 SendGrid API Key Issue:');
+          console.log('   - API key may be invalid, expired, or revoked');
+          console.log('   - Check SendGrid dashboard for key status');
+          console.log('   - Generate a new API key if needed');
+        } else if (response.status === 403) {
+          console.log('🔧 SendGrid API Permission Issue:');
+          console.log('   - API key may not have mail send permissions');
+          console.log('   - Check SendGrid account verification status');
+        }
+        
+        throw new Error(`SendGrid API failed: ${response.status} - ${errorText}`);
+      }
+      
+    } catch (error) {
+      console.error('❌ SendGrid API failed:', error.message);
       throw error;
     }
   }
