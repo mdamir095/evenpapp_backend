@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailerService } from '@nestjs-modules/mailer';
 import { WebhookEmailService } from './webhook-email.service';
+import * as nodemailer from 'nodemailer';
 
 @Injectable()
 export class RobustEmailService {
@@ -57,9 +58,7 @@ export class RobustEmailService {
       console.log('📧 Trying Gmail SMTP...');
       
       // Create a new nodemailer transport for Gmail SMTP
-      const nodemailer = require('nodemailer');
-      
-      const transporter = nodemailer.createTransporter({
+      const transporter = nodemailer.createTransport({
         host: 'smtp.gmail.com',
         port: 587,
         secure: false, // Use TLS
@@ -72,6 +71,11 @@ export class RobustEmailService {
         socketTimeout: 20000,     // 20 seconds
       });
       
+      // Verify connection configuration
+      console.log('📧 Verifying Gmail SMTP connection...');
+      await transporter.verify();
+      console.log('✅ Gmail SMTP connection verified');
+      
       const mailOptions = {
         from: `"No Reply" <${this.configService.get('email.SMTP_FROM')}>`,
         to: to,
@@ -79,8 +83,9 @@ export class RobustEmailService {
         text: text,
       };
       
-      await transporter.sendMail(mailOptions);
-      console.log('✅ Gmail SMTP email sent successfully');
+      console.log('📧 Sending email via Gmail SMTP...');
+      const info = await transporter.sendMail(mailOptions);
+      console.log('✅ Gmail SMTP email sent successfully:', info.messageId);
       return true;
     } catch (error) {
       console.error('❌ Gmail SMTP failed:', error.message);
