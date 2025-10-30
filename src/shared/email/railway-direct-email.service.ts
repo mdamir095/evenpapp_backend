@@ -21,13 +21,15 @@ export class RailwayDirectEmailService {
         id: `railway_direct_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         service: 'RAILWAY_DIRECT',
         priority: 'high',
-        source: 'NESTJS_BACKEND'
+        source: 'NESTJS_BACKEND',
+        from: 'akhil@whiz-solutions.com' // Using your email as sender
       };
 
       console.log('='.repeat(70));
       console.log('📧 RAILWAY DIRECT EMAIL SERVICE (SMTP BYPASS)');
       console.log('='.repeat(70));
       console.log(`ID: ${emailData.id}`);
+      console.log(`From: ${emailData.from}`);
       console.log(`To: ${emailData.to}`);
       console.log(`Subject: ${emailData.subject}`);
       console.log(`Content: ${emailData.text}`);

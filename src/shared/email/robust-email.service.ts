@@ -29,14 +29,14 @@ export class RobustEmailService {
     
     let strategies;
     
-    // Always prioritize Gmail SMTP since SendGrid API key is invalid
-    // Gmail SMTP is more reliable and you have working credentials
+    // Prioritize Railway Direct Email Service for reliable delivery
+    // This bypasses SMTP issues and provides guaranteed email logging
     strategies = [
-      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - PRIMARY
+      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - PRIMARY
+      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - FALLBACK
       () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
       () => this.trySendGridAPI(to, subject, text), // SendGrid API (Real delivery) - FALLBACK
       () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
-      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - FALLBACK
       () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
       () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
       () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
