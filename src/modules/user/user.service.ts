@@ -1202,66 +1202,73 @@ export class UserService {
   }
 
   async updateProfileImageBase64(userId: string, profileImage: string) {
-    if (!profileImage) {
-      throw new BadRequestException('Profile image is required');
+    try {
+      console.log('🖼️ Updating profile image for user:', userId);
+      
+      if (!profileImage) {
+        throw new BadRequestException('Profile image is required');
+      }
+      
+      // Extract base64 data
+      const matches = profileImage?.match(
+        /^data:image\/(png|jpeg|jpg);base64,(.+)$/,
+      );
+      if (!matches) throw new BadRequestException('Invalid image format');
+
+      const ext = matches[1];
+      const base64Data = matches[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+      const mimetype = `image/${ext}`;
+      const fileName = `${uuidv4()}.${ext}`;
+      let imageUrl: any = '';
+      
+      console.log('📁 Processing image:', { ext, mimetype, fileName, size: buffer.length });
+      
+      if (process.env.NODE_ENV === 'local') {
+        console.log('🏠 Using Supabase for local development');
+        const { path, publicUrl } = await this.supabaseService.upload({
+          filePath: 'profile_' + fileName,
+          file: buffer,
+          contentType: mimetype,
+          bucket: 'profiles',
+        });
+        imageUrl = publicUrl;
+        console.log('✅ Supabase upload successful:', { imageUrl, path });
+      } else {
+        console.log('☁️ Using AWS S3 for production');
+        // For production, upload to S3
+        const awsUploadReqDto = {
+          Bucket: this.awsConfig.bucketName,
+          Key:
+            this.awsConfig.bucketFolderName +
+            '/' +
+            this.awsConfig.bucketTempFolderName +
+            '/' +
+            fileName,
+          Body: buffer,
+          ContentType: mimetype,
+        };
+
+        const response =
+          await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
+        imageUrl = response?.Location;
+        console.log('✅ AWS S3 upload successful:', imageUrl);
+      }
+      
+      // Update in DB
+      console.log('💾 Updating database with image URL:', imageUrl);
+      const updateResult = await this.userRepository.update(
+        { _id: new ObjectId(userId) } as any,
+        { profileImage: imageUrl }
+      );
+      
+      console.log('✅ Database update result:', updateResult);
+      return { profileImage: imageUrl };
+      
+    } catch (error) {
+      console.error('❌ Error updating profile image:', error);
+      throw error;
     }
-    // Extract base64 data
-    const matches = profileImage?.match(
-      /^data:image\/(png|jpeg|jpg);base64,(.+)$/,
-    );
-    if (!matches) throw new BadRequestException('Invalid image format');
-
-    const ext = matches[1];
-    const base64Data = matches[2];
-    const buffer = Buffer.from(base64Data, 'base64');
-    const mimetype = `image/${ext}`;
-    const fileName = `${uuidv4()}.${ext}`;
-    let imageUrl: any = '';
-    if (process.env.NODE_ENV === 'local') {
-      const { path, publicUrl } = await this.supabaseService.upload({
-        filePath: 'profile_' + fileName,
-        file: buffer,
-        contentType: mimetype,
-        bucket: 'profiles',
-      });
-      imageUrl = publicUrl;
-      console.log(imageUrl);
-      console.log(path);
-      // For local development, save to local file system
-      // const rootDir = path.resolve(__dirname, '..', '..', '..');
-      // const dir = path.join(rootDir, 'uploads', 'profile');
-      // if (!fs.existsSync(dir)) {
-      //   fs.mkdirSync(dir, { recursive: true });
-      // }
-      // const filePath = path.join(dir, fileName);
-      // fs.writeFileSync(filePath, buffer);
-      // // Return the URL path, not the file path
-      // imageUrl = `/uploads/profile/${fileName}`;
-    } else {
-      // For production, upload to S3
-      const awsUploadReqDto = {
-        Bucket: this.awsConfig.bucketName,
-        Key:
-          this.awsConfig.bucketFolderName +
-          '/' +
-          this.awsConfig.bucketTempFolderName +
-          '/' +
-          fileName,
-        Body: buffer,
-        ContentType: mimetype,
-      };
-
-      const response =
-        await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
-      imageUrl = response?.Location;
-    }
-    // Update in DB
-    await this.userRepository.updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { profileImage: imageUrl } },
-    );
-
-    return { profileImage: imageUrl };
   }
 
   async uploadFilesToS3Bucket(file: any): Promise<string> {
