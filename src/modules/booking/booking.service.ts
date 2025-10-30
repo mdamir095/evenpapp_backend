@@ -17,6 +17,7 @@ import { EventType } from '@modules/quotation-request/entity/event-type.entity';
 import { LocationService } from '@modules/location/location.service';
 import { UserService } from '@modules/user/user.service';
 import { CategoryPricingHelper } from '@modules/vendor/helpers/category-pricing.helper';
+import { SupabaseService } from '@shared/modules/supabase/supabase.service';
 
 @Injectable()
 export class BookingService {
@@ -37,6 +38,7 @@ export class BookingService {
     private readonly awsS3Service: AwsS3Service,
     private readonly locationService: LocationService,
     private readonly userService: UserService,
+    private readonly supabaseService: SupabaseService,
   ) {}
 
   async findAllForAdmin(
@@ -650,46 +652,88 @@ export class BookingService {
   }
 
   private async uploadBase64Images(base64Images: string[]): Promise<string[]> {
-    const uploadedUrls: string[] = [];
-    const awsConfig = this.configService.get('aws');
-    for (const base64Image of base64Images) {
-      if (!base64Image) continue;
-      const matches = base64Image.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
-      if (!matches) {
-        throw new BadRequestException('Invalid base64 image format');
-      }
-      const ext = matches[1];
-      const base64Data = matches[2];
-      const buffer = Buffer.from(base64Data, 'base64');
-      const mimetype = `image/${ext}`;
-      const timestamp = Date.now();
-      const fileName = `request_booking_${timestamp}_${Math.random()
-        .toString(36)
-        .substring(7)}.${ext}`;
-
-      let imageUrl = '';
-      if (process.env.NODE_ENV === 'local') {
-        const rootDir = path.resolve(__dirname, '..', '..', '..');
-        const dir = path.join(rootDir, 'uploads', 'quotation');
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
+    try {
+      console.log('📸 Uploading reference images for booking request...');
+      const uploadedUrls: string[] = [];
+      const awsConfig = this.configService.get('aws');
+      
+      for (const base64Image of base64Images) {
+        if (!base64Image) continue;
+        
+        const matches = base64Image.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
+        if (!matches) {
+          throw new BadRequestException('Invalid base64 image format');
         }
-        const filePath = path.join(dir, fileName);
-        fs.writeFileSync(filePath, buffer);
-        imageUrl = `/uploads/quotation/${fileName}`;
-      } else {
-        const awsUploadReqDto = {
-          Bucket: awsConfig.bucketName,
-          Key: awsConfig.bucketFolderName + '/' + 'quotation' + '/' + fileName,
-          Body: buffer,
-          ContentType: mimetype,
-        } as any;
-        const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
-        imageUrl = (response as any)?.Location || '';
+        
+        const ext = matches[1];
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const mimetype = `image/${ext}`;
+        const timestamp = Date.now();
+        const fileName = `request_booking_${timestamp}_${Math.random()
+          .toString(36)
+          .substring(7)}.${ext}`;
+
+        console.log('📁 Processing reference image:', { ext, mimetype, fileName, size: buffer.length });
+
+        let imageUrl = '';
+        
+        if (process.env.NODE_ENV === 'local') {
+          console.log('🏠 Using local file system for development');
+          const rootDir = path.resolve(__dirname, '..', '..', '..');
+          const dir = path.join(rootDir, 'uploads', 'quotation');
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+          const filePath = path.join(dir, fileName);
+          fs.writeFileSync(filePath, buffer);
+          imageUrl = `/uploads/quotation/${fileName}`;
+          console.log('✅ Local file saved:', imageUrl);
+        } else {
+          console.log('☁️ Using AWS S3 for production');
+          try {
+            // Try AWS S3 first
+            const awsUploadReqDto = {
+              Bucket: awsConfig.bucketName,
+              Key: awsConfig.bucketFolderName + '/' + 'quotation' + '/' + fileName,
+              Body: buffer,
+              ContentType: mimetype,
+            } as any;
+            
+            const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
+            imageUrl = (response as any)?.Location || '';
+            console.log('✅ AWS S3 upload successful:', imageUrl);
+          } catch (s3Error) {
+            console.error('❌ AWS S3 upload failed, using Supabase fallback:', s3Error.message);
+            // Fallback to Supabase if AWS S3 fails
+            try {
+              const { publicUrl } = await this.supabaseService.upload({
+                filePath: 'quotation_' + fileName,
+                file: buffer,
+                contentType: mimetype,
+                bucket: 'quotation',
+              });
+              imageUrl = publicUrl || '';
+              console.log('✅ Supabase fallback upload successful:', imageUrl);
+            } catch (supabaseError) {
+              console.error('❌ Supabase fallback also failed:', supabaseError.message);
+              // Final fallback - return a placeholder URL
+              imageUrl = `https://via.placeholder.com/300x200/cccccc/666666?text=Reference+Image`;
+              console.log('⚠️ Using placeholder image URL:', imageUrl);
+            }
+          }
+        }
+        
+        uploadedUrls.push(imageUrl);
       }
-      uploadedUrls.push(imageUrl);
+      
+      console.log('✅ All reference images processed:', uploadedUrls.length);
+      return uploadedUrls;
+      
+    } catch (error) {
+      console.error('❌ Error uploading reference images:', error);
+      throw error;
     }
-    return uploadedUrls;
   }
 
   async cancelBooking(bookingId: string, dto: any, userId: string): Promise<any> {

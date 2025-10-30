@@ -13,6 +13,7 @@ import { AwsS3Service } from '@core/aws/services/aws-s3.service'
 import { ConfigModule } from '@nestjs/config'
 import { LocationModule } from '@modules/location/location.module'
 import { UserModule } from '@modules/user/user.module'
+import { SupabaseModule } from '@shared/modules/supabase/supabase.module'
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { UserModule } from '@modules/user/user.module'
     ConfigModule,
     LocationModule,
     UserModule,
+    SupabaseModule,
   ],
   controllers: [BookingController],
   providers: [BookingService, AwsS3Service],
