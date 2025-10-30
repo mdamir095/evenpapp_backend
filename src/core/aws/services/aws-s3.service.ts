@@ -79,20 +79,32 @@ export class AwsS3Service {
       },
       region: this.awsConfig.regionName
     }
+    
+    // Configure credentials for both local and production
     if (environment == "local") {
-      // const configFilePath = path.join(__dirname, '../keys');
-      // const jsonString = fs.readFileSync(configFilePath, 'utf-8');
-      // const secret = JSON.parse(jsonString);
+      // Local development - use hardcoded credentials
       config.credentials = {
-        // accessKeyId: secret.accessKeyId,
-        // secretAccessKey: secret.secretAccessKey,
         accessKeyId: "AKIA52JBVXHFBSPG4DFI",
-        secretAccessKey:  "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", 
+        secretAccessKey: "lw4l9NfX5MSPjfl1g7kUJk7kL1L3pxfE5942QpR4", 
       };
+    } else {
+      // Production - use environment variables or IAM roles
+      const accessKeyId = process.env.AWS_ACCESS_KEY_ID || this.awsConfig.accessKeyId;
+      const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || this.awsConfig.secretAccessKey;
+      
+      if (accessKeyId && secretAccessKey) {
+        config.credentials = {
+          accessKeyId: accessKeyId,
+          secretAccessKey: secretAccessKey,
+        };
+      } else {
+        // If no credentials provided, AWS SDK will use IAM roles or default credential chain
+        console.log('⚠️ No AWS credentials found, using default credential chain');
+      }
     }
-    this.loggerService.log(`[${AwsS3Service.name}::awsS3Configration] return the aws configration`);
+    
+    this.loggerService.log(`[${AwsS3Service.name}::awsS3Configration] return the aws configration for environment: ${environment}`);
     return config;
-
   }
   async createLogStream(name: string, config: IAws) {
     this.loggerService.log(`[${AwsS3Service.name}::createLogStream] CloudWatchLogs method called`);
@@ -125,12 +137,19 @@ export class AwsS3Service {
   }
 
   async uploadFilesToS3Bucket(arParams: AwsUploadReqDto) {
-    this.loggerService.log(`[${AwsS3Service.name}::uploadFilesToS3Bucket] awsS3Configration method called`);
-    let config = await this.awsS3Configration(arParams.Bucket);
-    const s3 = new S3(config);
-    this.loggerService.log(`[${AwsS3Service.name}::uploadFilesToS3Bucket] Upload method called`);
-    const data = await new Upload({ client: s3, params: arParams }).done();
-    return data;
+    try {
+      this.loggerService.log(`[${AwsS3Service.name}::uploadFilesToS3Bucket] awsS3Configration method called`);
+      let config = await this.awsS3Configration(arParams.Bucket);
+      const s3 = new S3(config);
+      this.loggerService.log(`[${AwsS3Service.name}::uploadFilesToS3Bucket] Upload method called`);
+      const data = await new Upload({ client: s3, params: arParams }).done();
+      this.loggerService.log(`[${AwsS3Service.name}::uploadFilesToS3Bucket] Upload successful: ${data.Location}`);
+      return data;
+    } catch (error) {
+      this.loggerService.log(`[${AwsS3Service.name}::uploadFilesToS3Bucket] Upload failed: ${error.message}`);
+      console.error('❌ AWS S3 Upload Error:', error);
+      throw error;
+    }
   }
 
   async copyFilesFromS3Bucket(arParams: AwsS3CopyReqDto) {

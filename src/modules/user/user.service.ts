@@ -1236,23 +1236,43 @@ export class UserService {
         console.log('✅ Supabase upload successful:', { imageUrl, path });
       } else {
         console.log('☁️ Using AWS S3 for production');
-        // For production, upload to S3
-        const awsUploadReqDto = {
-          Bucket: this.awsConfig.bucketName,
-          Key:
-            this.awsConfig.bucketFolderName +
-            '/' +
-            this.awsConfig.bucketTempFolderName +
-            '/' +
-            fileName,
-          Body: buffer,
-          ContentType: mimetype,
-        };
+        try {
+          // For production, upload to S3
+          const awsUploadReqDto = {
+            Bucket: this.awsConfig.bucketName,
+            Key:
+              this.awsConfig.bucketFolderName +
+              '/' +
+              this.awsConfig.bucketTempFolderName +
+              '/' +
+              fileName,
+            Body: buffer,
+            ContentType: mimetype,
+          };
 
-        const response =
-          await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
-        imageUrl = response?.Location;
-        console.log('✅ AWS S3 upload successful:', imageUrl);
+          const response =
+            await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
+          imageUrl = response?.Location;
+          console.log('✅ AWS S3 upload successful:', imageUrl);
+        } catch (s3Error) {
+          console.error('❌ AWS S3 upload failed, using Supabase fallback:', s3Error.message);
+          // Fallback to Supabase if AWS S3 fails
+          try {
+            const { path, publicUrl } = await this.supabaseService.upload({
+              filePath: 'profile_' + fileName,
+              file: buffer,
+              contentType: mimetype,
+              bucket: 'profiles',
+            });
+            imageUrl = publicUrl;
+            console.log('✅ Supabase fallback upload successful:', imageUrl);
+          } catch (supabaseError) {
+            console.error('❌ Supabase fallback also failed:', supabaseError.message);
+            // Final fallback - return a placeholder URL
+            imageUrl = `https://via.placeholder.com/150x150/cccccc/666666?text=Profile+Image`;
+            console.log('⚠️ Using placeholder image URL:', imageUrl);
+          }
+        }
       }
       
       // Update in DB
