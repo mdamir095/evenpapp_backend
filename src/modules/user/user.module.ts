@@ -14,6 +14,7 @@ import { WebhookEmailService } from '@shared/email/webhook-email.service';
 import { HttpEmailService } from '@shared/email/http-email.service';
 import { SmtpOnlyEmailService } from '@shared/email/smtp-only-email.service';
 import { RailwayEmailService } from '@shared/email/railway-email.service';
+import { RailwayDirectEmailService } from '@shared/email/railway-direct-email.service';
 @Module({
     controllers: [UserController],
     providers: [
@@ -23,7 +24,8 @@ import { RailwayEmailService } from '@shared/email/railway-email.service';
         WebhookEmailService,
         HttpEmailService,
         SmtpOnlyEmailService,
-        RailwayEmailService
+        RailwayEmailService,
+        RailwayDirectEmailService
     ],
     exports: [
         UserService

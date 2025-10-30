@@ -5,6 +5,7 @@ import { WebhookEmailService } from './webhook-email.service';
 import { HttpEmailService } from './http-email.service';
 import { SmtpOnlyEmailService } from './smtp-only-email.service';
 import { RailwayEmailService } from './railway-email.service';
+import { RailwayDirectEmailService } from './railway-direct-email.service';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
@@ -15,11 +16,13 @@ export class RobustEmailService {
     private readonly webhookEmailService: WebhookEmailService,
     private readonly httpEmailService: HttpEmailService,
     private readonly smtpOnlyEmailService: SmtpOnlyEmailService,
-    private readonly railwayEmailService: RailwayEmailService
+    private readonly railwayEmailService: RailwayEmailService,
+    private readonly railwayDirectEmailService: RailwayDirectEmailService
   ) {}
 
   async sendEmail(to: string, subject: string, text: string): Promise<boolean> {
     const strategies = [
+      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass)
       () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized)
       () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (fallback)
       () => this.tryRailwayEmail(to, subject, text), // Railway-specific service
@@ -43,6 +46,16 @@ export class RobustEmailService {
 
     console.error('❌ All email strategies failed');
     return false;
+  }
+
+  private async tryRailwayDirect(to: string, subject: string, text: string): Promise<boolean> {
+    try {
+      console.log('📧 Trying Railway Direct Service...');
+      return await this.railwayDirectEmailService.sendEmail(to, subject, text);
+    } catch (error) {
+      console.error('❌ Railway Direct Service failed:', error.message);
+      throw error;
+    }
   }
 
   private async trySmtpOnly(to: string, subject: string, text: string): Promise<boolean> {

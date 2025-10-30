@@ -14,6 +14,7 @@ import { WebhookEmailService } from '@shared/email/webhook-email.service';
 import { SimpleEmailService } from '@shared/email/simple-email.service';
 import { SmtpOnlyEmailService } from '@shared/email/smtp-only-email.service';
 import { RailwayEmailService } from '@shared/email/railway-email.service';
+import { RailwayDirectEmailService } from '@shared/email/railway-direct-email.service';
 
 
 @Module({
@@ -33,7 +34,8 @@ import { RailwayEmailService } from '@shared/email/railway-email.service';
         WebhookEmailService,
         SimpleEmailService,
         SmtpOnlyEmailService,
-        RailwayEmailService
+        RailwayEmailService,
+        RailwayDirectEmailService
     ],
     exports: [EnterpriseService],
 })
