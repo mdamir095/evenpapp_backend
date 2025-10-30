@@ -29,30 +29,18 @@ export class RobustEmailService {
     
     let strategies;
     
-    if (isProduction && hasSendGrid) {
-      // Production with SendGrid: Prioritize HTTP-based services
-      strategies = [
-        () => this.trySendGridAPI(to, subject, text), // SendGrid API (Real delivery) - PRIMARY
-        () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
-        () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - FALLBACK
-        () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - FALLBACK
-        () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
-        () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
-        () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
-        () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
-      ];
-    } else {
-      // Development or no SendGrid: Use Gmail SMTP first
-      strategies = [
-        () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - PRIMARY
-        () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
-        () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
-        () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - FALLBACK
-        () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
-        () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
-        () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
-      ];
-    }
+    // Always prioritize Gmail SMTP since SendGrid API key is invalid
+    // Gmail SMTP is more reliable and you have working credentials
+    strategies = [
+      () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (Real delivery) - PRIMARY
+      () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized) - FALLBACK
+      () => this.trySendGridAPI(to, subject, text), // SendGrid API (Real delivery) - FALLBACK
+      () => this.tryResend(to, subject, text), // Resend Email Service (Real delivery) - FALLBACK
+      () => this.tryRailwayDirect(to, subject, text), // Railway Direct Service (SMTP bypass) - FALLBACK
+      () => this.tryRailwayEmail(to, subject, text), // Railway-specific service - BACKUP
+      () => this.tryWebhook(to, subject, text), // Webhook logging - BACKUP
+      () => this.tryConsoleLog(to, subject, text) // Console logging - GUARANTEED
+    ];
 
     for (let i = 0; i < strategies.length; i++) {
       try {
@@ -145,13 +133,17 @@ export class RobustEmailService {
           port: 587,
           secure: false, // Use TLS
           auth: { user: smtpUser, pass: smtpPass },
-          connectionTimeout: 30000, // Increased timeout for Railway
-          greetingTimeout: 30000,
-          socketTimeout: 30000,
-          tls: { rejectUnauthorized: false }, // Allow self-signed certificates
-          pool: true,
-          maxConnections: 1,
-          maxMessages: 1,
+          connectionTimeout: 15000, // Reduced timeout for faster fallback
+          greetingTimeout: 15000,
+          socketTimeout: 15000,
+          tls: { 
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3',
+            servername: 'smtp.gmail.com'
+          },
+          pool: false, // Disable pooling for Railway
+          ignoreTLS: false,
+          requireTLS: true,
         },
         {
           name: 'Gmail SSL (Port 465) - Railway Optimized',
@@ -159,13 +151,15 @@ export class RobustEmailService {
           port: 465,
           secure: true,
           auth: { user: smtpUser, pass: smtpPass },
-          connectionTimeout: 30000,
-          greetingTimeout: 30000,
-          socketTimeout: 30000,
-          tls: { rejectUnauthorized: false },
-          pool: true,
-          maxConnections: 1,
-          maxMessages: 1,
+          connectionTimeout: 15000,
+          greetingTimeout: 15000,
+          socketTimeout: 15000,
+          tls: { 
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3',
+            servername: 'smtp.gmail.com'
+          },
+          pool: false,
         },
         {
           name: 'Gmail TLS (Port 2525) - Alternative',
@@ -173,10 +167,14 @@ export class RobustEmailService {
           port: 2525,
           secure: false,
           auth: { user: smtpUser, pass: smtpPass },
-          connectionTimeout: 20000,
-          greetingTimeout: 20000,
-          socketTimeout: 20000,
-          tls: { rejectUnauthorized: false },
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 10000,
+          tls: { 
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3'
+          },
+          pool: false,
         }
       ];
       
