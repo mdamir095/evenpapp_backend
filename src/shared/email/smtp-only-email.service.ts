@@ -26,49 +26,94 @@ export class SmtpOnlyEmailService {
         throw new Error('SMTP credentials not configured');
       }
 
-      // Create transporter with Railway-optimized settings
-      const transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 587,
-        secure: false, // Use TLS
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
+      // Try multiple SMTP configurations for Railway
+      const configs = [
+        {
+          name: 'Gmail TLS (Port 587) - Railway Optimized',
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          auth: { user: smtpUser, pass: smtpPass },
+          connectionTimeout: 60000,
+          greetingTimeout: 60000,
+          socketTimeout: 60000,
+          tls: { 
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3',
+            servername: 'smtp.gmail.com'
+          },
+          pool: false,
+          ignoreTLS: false,
+          requireTLS: true,
         },
-        connectionTimeout: 45000, // 45 seconds for Railway
-        greetingTimeout: 45000,
-        socketTimeout: 45000,
-        tls: { 
-          rejectUnauthorized: false, // Allow self-signed certificates
-          ciphers: 'SSLv3' // Use older cipher for compatibility
+        {
+          name: 'Gmail SSL (Port 465) - Railway Optimized',
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
+          auth: { user: smtpUser, pass: smtpPass },
+          connectionTimeout: 60000,
+          greetingTimeout: 60000,
+          socketTimeout: 60000,
+          tls: { 
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3',
+            servername: 'smtp.gmail.com'
+          },
+          pool: false,
         },
-        pool: true,
-        maxConnections: 1,
-        maxMessages: 1,
-        rateLimit: 1, // Send 1 email per second max
-      });
+        {
+          name: 'Gmail TLS (Port 2525) - Alternative',
+          host: 'smtp.gmail.com',
+          port: 2525,
+          secure: false,
+          auth: { user: smtpUser, pass: smtpPass },
+          connectionTimeout: 30000,
+          greetingTimeout: 30000,
+          socketTimeout: 30000,
+          tls: { 
+            rejectUnauthorized: false,
+            ciphers: 'SSLv3'
+          },
+          pool: false,
+        }
+      ];
 
-      // Verify connection
-      console.log('📧 Verifying SMTP connection...');
-      await transporter.verify();
-      console.log('✅ SMTP connection verified');
+      for (const config of configs) {
+        try {
+          console.log(`📧 Trying ${config.name}...`);
+          
+          const transporter = nodemailer.createTransport(config);
+          
+          // Quick connection test
+          console.log('📧 Testing connection...');
+          await transporter.verify();
+          console.log(`✅ ${config.name} connection verified`);
+          
+          // Send email
+          const mailOptions = {
+            from: `"No Reply" <${smtpFrom}>`,
+            to: to,
+            subject: subject,
+            text: text,
+          };
 
-      // Send email
-      const mailOptions = {
-        from: `"No Reply" <${smtpFrom}>`,
-        to: to,
-        subject: subject,
-        text: text,
-      };
-
-      console.log('📧 Sending email via Gmail SMTP...');
-      const info = await transporter.sendMail(mailOptions);
-      console.log('✅ Email sent successfully via Gmail SMTP:', info.messageId);
+          console.log('📧 Sending email...');
+          const info = await transporter.sendMail(mailOptions);
+          console.log(`✅ Email sent successfully via ${config.name}:`, info.messageId);
+          
+          // Close the connection
+          transporter.close();
+          
+          return true;
+          
+        } catch (configError) {
+          console.log(`❌ ${config.name} failed:`, configError.message);
+          // Continue to next configuration
+        }
+      }
       
-      // Close the connection
-      transporter.close();
-      
-      return true;
+      throw new Error('All SMTP configurations failed');
       
     } catch (error) {
       console.error('❌ SMTP-Only Email Service failed:', error.message);

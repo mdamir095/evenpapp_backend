@@ -13,6 +13,7 @@ import { RobustEmailService } from '@shared/email/robust-email.service';
 import { WebhookEmailService } from '@shared/email/webhook-email.service';
 import { HttpEmailService } from '@shared/email/http-email.service';
 import { SmtpOnlyEmailService } from '@shared/email/smtp-only-email.service';
+import { RailwayEmailService } from '@shared/email/railway-email.service';
 @Module({
     controllers: [UserController],
     providers: [
@@ -21,7 +22,8 @@ import { SmtpOnlyEmailService } from '@shared/email/smtp-only-email.service';
         RobustEmailService,
         WebhookEmailService,
         HttpEmailService,
-        SmtpOnlyEmailService
+        SmtpOnlyEmailService,
+        RailwayEmailService
     ],
     exports: [
         UserService

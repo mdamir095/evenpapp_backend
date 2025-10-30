@@ -13,6 +13,7 @@ import { HttpEmailService } from '@shared/email/http-email.service';
 import { WebhookEmailService } from '@shared/email/webhook-email.service';
 import { SimpleEmailService } from '@shared/email/simple-email.service';
 import { SmtpOnlyEmailService } from '@shared/email/smtp-only-email.service';
+import { RailwayEmailService } from '@shared/email/railway-email.service';
 
 
 @Module({
@@ -31,7 +32,8 @@ import { SmtpOnlyEmailService } from '@shared/email/smtp-only-email.service';
         HttpEmailService,
         WebhookEmailService,
         SimpleEmailService,
-        SmtpOnlyEmailService
+        SmtpOnlyEmailService,
+        RailwayEmailService
     ],
     exports: [EnterpriseService],
 })

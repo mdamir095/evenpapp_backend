@@ -4,6 +4,7 @@ import { MailerService } from '@nestjs-modules/mailer';
 import { WebhookEmailService } from './webhook-email.service';
 import { HttpEmailService } from './http-email.service';
 import { SmtpOnlyEmailService } from './smtp-only-email.service';
+import { RailwayEmailService } from './railway-email.service';
 import * as nodemailer from 'nodemailer';
 
 @Injectable()
@@ -13,13 +14,15 @@ export class RobustEmailService {
     private readonly mailerService: MailerService,
     private readonly webhookEmailService: WebhookEmailService,
     private readonly httpEmailService: HttpEmailService,
-    private readonly smtpOnlyEmailService: SmtpOnlyEmailService
+    private readonly smtpOnlyEmailService: SmtpOnlyEmailService,
+    private readonly railwayEmailService: RailwayEmailService
   ) {}
 
   async sendEmail(to: string, subject: string, text: string): Promise<boolean> {
     const strategies = [
       () => this.trySmtpOnly(to, subject, text), // SMTP-Only Service (Railway optimized)
       () => this.tryGmailSMTP(to, subject, text), // Gmail SMTP (fallback)
+      () => this.tryRailwayEmail(to, subject, text), // Railway-specific service
       () => this.tryWebhook(to, subject, text), // Webhook logging
       () => this.tryConsoleLog(to, subject, text) // Console logging
     ];
@@ -173,6 +176,16 @@ export class RobustEmailService {
       return await this.httpEmailService.sendEmailViaHttp(to, subject, text);
     } catch (error) {
       console.error('❌ HTTP email service failed:', error.message);
+      throw error;
+    }
+  }
+
+  private async tryRailwayEmail(to: string, subject: string, text: string): Promise<boolean> {
+    try {
+      console.log('📧 Trying Railway Email service...');
+      return await this.railwayEmailService.sendEmail(to, subject, text);
+    } catch (error) {
+      console.error('❌ Railway Email service failed:', error.message);
       throw error;
     }
   }
