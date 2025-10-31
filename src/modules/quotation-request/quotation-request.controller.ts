@@ -67,7 +67,20 @@ export class QuotationRequestController {
     console.log('Quotation Request Controller - User ID for getQuotationRequests:', userId, 'Type:', typeof userId);
     
     // Force filter by logged-in user's ID (ignore any userId query parameter for security)
-    return await this.quotationRequestService.findAll(page, limit, userId, search);
+    const result = await this.quotationRequestService.findAll(page, limit, userId, search);
+    
+    // Log referenceImages in response for debugging
+    if (result.data && result.data.length > 0) {
+      console.log('Quotation Request Controller - Sample referenceImages from response:', result.data.slice(0, 2).map((q: any) => ({
+        id: q._id || q.id,
+        referenceImages: q.referenceImages,
+        referenceImagesCount: q.referenceImages?.length || 0,
+        referenceImagesType: typeof q.referenceImages,
+        referenceImagesIsArray: Array.isArray(q.referenceImages)
+      })));
+    }
+    
+    return result;
   }
 
   @Get('quotation-requests/:id')

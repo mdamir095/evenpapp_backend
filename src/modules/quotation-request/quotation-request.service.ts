@@ -116,12 +116,44 @@ export class QuotationRequestService {
 
       console.log('Quotation Request Service - Found', total, 'quotation requests for userId:', userId);
       
+      // Process referenceImages for each quotation - filter out placeholder URLs and ensure proper format
+      const processedData = data.map((quotation: any) => {
+        let referenceImages = quotation.referenceImages || [];
+        
+        if (Array.isArray(referenceImages)) {
+          // Filter out placeholder URLs if any exist
+          referenceImages = referenceImages.filter((url: string) => {
+            if (!url || typeof url !== 'string') {
+              return false;
+            }
+            // Keep only actual image URLs, not placeholder URLs
+            return !url.includes('via.placeholder.com') && !url.includes('placeholder');
+          });
+        } else {
+          // If referenceImages is not an array, convert to array or set to empty
+          referenceImages = [];
+        }
+        
+        // Explicitly include referenceImages in the response
+        return {
+          ...quotation,
+          referenceImages: referenceImages, // Explicitly set processed referenceImages
+        };
+      });
+      
+      // Log summary of referenceImages processing
+      if (processedData.length > 0) {
+        const withImages = processedData.filter((q: any) => q.referenceImages && q.referenceImages.length > 0).length;
+        console.log(`Quotation Request Service - Processed ${processedData.length} quotations, ${withImages} have reference images`);
+      }
+      
       // Debug: Log userIds from found quotations to see format
-      if (data && data.length > 0) {
-        console.log('Quotation Request Service - Sample userIds from results:', data.slice(0, 3).map((q: any) => ({
+      if (processedData && processedData.length > 0) {
+        console.log('Quotation Request Service - Sample userIds from results:', processedData.slice(0, 3).map((q: any) => ({
           id: q._id || q.id,
           userId: q.userId,
-          userIdType: typeof q.userId
+          userIdType: typeof q.userId,
+          referenceImagesCount: q.referenceImages?.length || 0
         })));
       } else {
         console.log('⚠️ Quotation Request Service - No quotations found. Checking if quotations exist without userId...');
@@ -131,10 +163,12 @@ export class QuotationRequestService {
           id: q._id || q.id,
           userId: q.userId,
           hasUserId: !!q.userId,
-          userIdType: typeof q.userId
+          userIdType: typeof q.userId,
+          referenceImagesCount: q.referenceImages?.length || 0
         })));
       }
-      return { data, total, page, limit };
+      
+      return { data: processedData, total, page, limit };
     } catch (error) {
       console.error('Quotation Request Service - Error in findAll:', error);
       throw new Error(`Failed to fetch quotation requests: ${error.message}`);
