@@ -50,12 +50,15 @@ export class BookingController {
   @ApiQuery({ name: 'bookingType', required: false, enum: ['venue', 'vendor'] })
   @ApiResponse({ status: HttpStatus.OK, type: BookingUserListResponseDto })
   async findAllForUser(
+    @Req() req: any,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
     @Query('search') search?: string,
     @Query('bookingType') bookingType?: 'venue' | 'vendor',
   ): Promise<BookingUserListResponseDto> {
-    const data = await this.bookingService.findAllForUser(page, limit, search, bookingType)
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub)
+    console.log('Booking Controller - User ID for findAllForUser:', userId, 'Type:', typeof userId)
+    const data = await this.bookingService.findAllForUser(userId, page, limit, search, bookingType)
     
     return {
       bookings: data.bookings,

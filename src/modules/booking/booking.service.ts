@@ -267,16 +267,26 @@ export class BookingService {
   }
 
   async findAllForUser(
+    userId: string,
     page = 1,
     limit = 10,
     search?: string,
     bookingType?: 'venue' | 'vendor',
   ): Promise<{ bookings: any[]; total: number; page: number; limit: number }> {
     try {
-      const where: any = { isDeleted: false };
+      console.log('findAllForUser - Filtering bookings for userId:', userId, 'Type:', typeof userId);
+      
+      // Filter bookings by userId - users should only see their own bookings
+      const where: any = { 
+        isDeleted: false,
+        userId: userId // Filter by logged-in user's ID
+      };
+      
       if (bookingType) {
         (where as any).bookingType = bookingType;
       }
+      
+      console.log('findAllForUser - Query where clause:', JSON.stringify(where, null, 2));
 
       let filteredVenueIds: string[] | undefined;
       if (search && search.trim().length > 0) {
@@ -575,16 +585,39 @@ export class BookingService {
       console.error('Error fetching venue for bookingId:', bookingId, err);
     }
 
+    // Process referenceImages - filter out placeholder URLs and ensure proper format
+    let referenceImages = (booking as any).referenceImages || [];
+    if (Array.isArray(referenceImages)) {
+      // Filter out placeholder URLs if any exist
+      referenceImages = referenceImages.filter((url: string) => {
+        if (!url || typeof url !== 'string') return false;
+        // Keep only actual image URLs, not placeholder URLs
+        return !url.includes('via.placeholder.com') && !url.includes('placeholder');
+      });
+      
+      // If all images were placeholders and filtered out, set to empty array
+      if (referenceImages.length === 0 && (booking as any).referenceImages?.length > 0) {
+        console.log('⚠️ All reference images were placeholders, returning empty array');
+      }
+    } else {
+      // If referenceImages is not an array, convert to array or set to empty
+      referenceImages = [];
+    }
+
     const bookingData = {
       ...booking,
       status: (booking as any).bookingStatus || 'pending',
       categoryType: (booking as any).categoryType || null,
+      referenceImages: referenceImages, // Use filtered referenceImages
       venue,
       vendor,
       event,
       photographyType,
       venueOrVenderInfo
     };
+
+    console.log('findByBookingId - Reference images count:', referenceImages.length);
+    console.log('findByBookingId - Reference images:', referenceImages);
 
     return bookingData;
   }
@@ -717,18 +750,24 @@ export class BookingService {
               console.log('✅ Supabase fallback upload successful:', imageUrl);
             } catch (supabaseError) {
               console.error('❌ Supabase fallback also failed:', supabaseError.message);
-              // Final fallback - return a placeholder URL
-              imageUrl = `https://via.placeholder.com/300x200/cccccc/666666?text=Reference+Image`;
-              console.log('⚠️ Using placeholder image URL:', imageUrl);
+              // Don't save placeholder URL - skip this image instead
+              console.log('⚠️ Image upload failed completely, skipping this image');
+              imageUrl = ''; // Empty string instead of placeholder
             }
           }
         }
         
-        uploadedUrls.push(imageUrl);
+        // Only add non-empty URLs (skip failed uploads)
+        if (imageUrl && imageUrl.trim() !== '') {
+          uploadedUrls.push(imageUrl);
+        } else {
+          console.log('⚠️ Skipping image due to upload failure');
+        }
       }
       
       console.log('✅ All reference images processed:', uploadedUrls.length);
-      return uploadedUrls;
+      // Filter out any empty strings just to be safe
+      return uploadedUrls.filter(url => url && url.trim() !== '');
       
     } catch (error) {
       console.error('❌ Error uploading reference images:', error);
