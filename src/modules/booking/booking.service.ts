@@ -676,8 +676,36 @@ export class BookingService {
     console.log('Booking Service - Saved entity userId:', (savedEntity as any).userId, 'Type:', typeof (savedEntity as any).userId);
     console.log('Booking Service - Saved entity referenceImages:', (savedEntity as any).referenceImages);
     console.log('Booking Service - Saved entity referenceImages count:', (savedEntity as any).referenceImages?.length || 0);
+    console.log('Booking Service - Saved entity keys:', Object.keys(savedEntity));
     
-    return savedEntity;
+    // Get referenceImages from multiple possible sources (MongoDB might store it differently)
+    const savedReferenceImages = (savedEntity as any).referenceImages || 
+                                 (savedEntity as any).referenceimages || 
+                                 uploadedImageUrls || 
+                                 [];
+    
+    console.log('Booking Service - Resolved referenceImages:', savedReferenceImages);
+    console.log('Booking Service - Resolved referenceImages type:', typeof savedReferenceImages);
+    console.log('Booking Service - Resolved referenceImages is array:', Array.isArray(savedReferenceImages));
+    
+    // Ensure referenceImages are explicitly included in the response
+    // Build response explicitly to ensure all fields are included
+    const response: any = {
+      ...savedEntity,
+      referenceImages: Array.isArray(savedReferenceImages) ? savedReferenceImages : uploadedImageUrls || [] // Explicitly set - MUST be included
+    };
+    
+    // Also spread to catch any other fields
+    Object.assign(response, savedEntity);
+    // Override referenceImages again to ensure it's not overwritten
+    response.referenceImages = Array.isArray(savedReferenceImages) ? savedReferenceImages : uploadedImageUrls || [];
+    
+    console.log('Booking Service - Response referenceImages (uploaded URLs):', response.referenceImages);
+    console.log('Booking Service - Response referenceImages count:', response.referenceImages?.length || 0);
+    console.log('Booking Service - Response keys:', Object.keys(response));
+    console.log('Booking Service - Response has referenceImages:', 'referenceImages' in response);
+    
+    return response;
   }
 
   async updateBooking(bookingId: string, dto: any, userId: string): Promise<any> {
@@ -806,8 +834,11 @@ export class BookingService {
       }
       
       console.log('✅ All reference images processed:', uploadedUrls.length);
+      console.log('✅ Uploaded URLs:', uploadedUrls);
       // Filter out any empty strings just to be safe
-      return uploadedUrls.filter(url => url && url.trim() !== '');
+      const filteredUrls = uploadedUrls.filter(url => url && url.trim() !== '');
+      console.log('✅ Filtered URLs to return:', filteredUrls);
+      return filteredUrls;
       
     } catch (error) {
       console.error('❌ Error uploading reference images:', error);
