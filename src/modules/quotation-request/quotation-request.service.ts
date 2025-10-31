@@ -64,12 +64,25 @@ export class QuotationRequestService {
 
       console.log('💾 Saving quotation request to database...');
       console.log('💾 Quotation Request - Entity userId:', (entity as any).userId, 'Type:', typeof (entity as any).userId);
+      console.log('💾 Quotation Request - Entity referenceImages (uploaded URLs):', (entity as any).referenceImages);
+      console.log('💾 Quotation Request - Entity referenceImages count:', (entity as any).referenceImages?.length || 0);
       
       const savedEntity = await this.repo.save(entity);
       console.log('✅ Quotation request created successfully:', (savedEntity as any)._id || (savedEntity as any).id);
       console.log('✅ Quotation Request - Saved entity userId:', (savedEntity as any).userId, 'Type:', typeof (savedEntity as any).userId);
+      console.log('✅ Quotation Request - Saved entity referenceImages (uploaded URLs):', (savedEntity as any).referenceImages);
+      console.log('✅ Quotation Request - Saved entity referenceImages count:', (savedEntity as any).referenceImages?.length || 0);
       
-      return savedEntity;
+      // Ensure referenceImages are explicitly included in the response with uploaded URLs
+      const response = {
+        ...savedEntity,
+        referenceImages: (savedEntity as any).referenceImages || uploadedImageUrls || []
+      };
+      
+      console.log('✅ Quotation Request - Response referenceImages (uploaded URLs):', response.referenceImages);
+      console.log('✅ Quotation Request - Response referenceImages count:', response.referenceImages?.length || 0);
+      
+      return response;
     } catch (error) {
       console.error('❌ Error creating quotation request:', error);
       throw new Error(`Failed to create quotation request: ${error.message}`);
@@ -462,8 +475,11 @@ export class QuotationRequestService {
       }
       
       console.log('✅ All reference images processed:', uploadedUrls.length);
+      console.log('✅ Uploaded URLs:', uploadedUrls);
       // Filter out any empty strings just to be safe
-      return uploadedUrls.filter(url => url && url.trim() !== '');
+      const filteredUrls = uploadedUrls.filter(url => url && url.trim() !== '');
+      console.log('✅ Filtered URLs to return:', filteredUrls);
+      return filteredUrls;
       
     } catch (error) {
       console.error('❌ Error uploading reference images:', error);

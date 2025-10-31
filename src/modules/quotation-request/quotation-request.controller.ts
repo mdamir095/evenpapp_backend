@@ -35,8 +35,14 @@ export class QuotationRequestController {
     // Extract user ID from JWT token
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
     console.log('Quotation Request Controller - User ID for create:', userId, 'Type:', typeof userId);
+    console.log('Quotation Request Controller - Incoming referenceImages count:', createQuotationRequestDto.referenceImages?.length || 0);
     
     const quotationRequest = await this.quotationRequestService.create(createQuotationRequestDto, userId);
+    
+    // Log response to ensure referenceImages with uploaded URLs are included
+    console.log('Quotation Request Controller - Response referenceImages (uploaded URLs):', (quotationRequest as any).referenceImages);
+    console.log('Quotation Request Controller - Response referenceImages count:', (quotationRequest as any).referenceImages?.length || 0);
+    
     return quotationRequest as any;
   }
 
