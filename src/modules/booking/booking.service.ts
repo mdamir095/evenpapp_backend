@@ -757,6 +757,7 @@ export class BookingService {
       console.log('📸 Uploading reference images for booking request...');
       const uploadedUrls: string[] = [];
       const awsConfig = this.configService.get('aws');
+      const hasAwsConfig = awsConfig && awsConfig.bucketName && awsConfig.bucketFolderName;
       
       for (const base64Image of base64Images) {
         if (!base64Image) continue;
@@ -778,50 +779,88 @@ export class BookingService {
         console.log('📁 Processing reference image:', { ext, mimetype, fileName, size: buffer.length });
 
         let imageUrl = '';
+        let uploadSuccess = false;
         
         if (process.env.NODE_ENV === 'local') {
-          console.log('🏠 Using local file system for development');
-          const rootDir = path.resolve(__dirname, '..', '..', '..');
-          const dir = path.join(rootDir, 'uploads', 'quotation');
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-          }
-          const filePath = path.join(dir, fileName);
-          fs.writeFileSync(filePath, buffer);
-          imageUrl = `/uploads/quotation/${fileName}`;
-          console.log('✅ Local file saved:', imageUrl);
-        } else {
-          console.log('☁️ Using AWS S3 for production');
-          try {
-            // Try AWS S3 first
-            const awsUploadReqDto = {
-              Bucket: awsConfig.bucketName,
-              Key: awsConfig.bucketFolderName + '/' + 'quotation' + '/' + fileName,
-              Body: buffer,
-              ContentType: mimetype,
-            } as any;
-            
-            const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
-            imageUrl = (response as any)?.Location || '';
-            console.log('✅ AWS S3 upload successful:', imageUrl);
-          } catch (s3Error) {
-            console.error('❌ AWS S3 upload failed, using Supabase fallback:', s3Error.message);
-            // Fallback to Supabase if AWS S3 fails
+          console.log('🏠 Using Supabase for local development (same as profile uploads)');
+          // Use Supabase with 'profiles' bucket (same as profile uploads)
+          const supabaseBuckets = ['profiles', 'uploads'];
+          for (const bucket of supabaseBuckets) {
             try {
+              console.log(`☁️ Trying Supabase bucket: ${bucket}`);
               const { publicUrl } = await this.supabaseService.upload({
-                filePath: 'quotation_' + fileName,
+                filePath: `booking/${fileName}`,
                 file: buffer,
                 contentType: mimetype,
-                bucket: 'quotation',
+                bucket: bucket,
+                upsert: true,
               });
-              imageUrl = publicUrl || '';
-              console.log('✅ Supabase fallback upload successful:', imageUrl);
-            } catch (supabaseError) {
-              console.error('❌ Supabase fallback also failed:', supabaseError.message);
-              // Don't save placeholder URL - skip this image instead
-              console.log('⚠️ Image upload failed completely, skipping this image');
-              imageUrl = ''; // Empty string instead of placeholder
+              if (publicUrl) {
+                imageUrl = publicUrl;
+                console.log(`✅ Supabase upload successful (bucket: ${bucket}):`, imageUrl);
+                uploadSuccess = true;
+                break;
+              }
+            } catch (supabaseError: any) {
+              console.log(`⚠️ Supabase bucket ${bucket} failed:`, supabaseError.message);
+              continue;
             }
+          }
+        } else {
+          // Production: Try Supabase first (same as profile uploads), then AWS S3 as fallback
+          console.log('☁️ Using Supabase for production (same as profile uploads)');
+          
+          // Try Supabase first with 'profiles' bucket (same as profile uploads)
+          const supabaseBuckets = ['profiles', 'uploads'];
+          for (const bucket of supabaseBuckets) {
+            try {
+              console.log(`☁️ Trying Supabase bucket: ${bucket}`);
+              const { publicUrl } = await this.supabaseService.upload({
+                filePath: `booking/${fileName}`,
+                file: buffer,
+                contentType: mimetype,
+                bucket: bucket,
+                upsert: true,
+              });
+              if (publicUrl) {
+                imageUrl = publicUrl;
+                console.log(`✅ Supabase upload successful (bucket: ${bucket}):`, imageUrl);
+                uploadSuccess = true;
+                break;
+              }
+            } catch (supabaseError: any) {
+              console.log(`⚠️ Supabase bucket ${bucket} failed:`, supabaseError.message);
+              continue;
+            }
+          }
+          
+          // If Supabase failed, try AWS S3 as fallback (only if configured)
+          if (!uploadSuccess && hasAwsConfig) {
+            try {
+              console.log('☁️ Trying AWS S3 as fallback');
+              const awsUploadReqDto = {
+                Bucket: awsConfig.bucketName,
+                Key: awsConfig.bucketFolderName + '/' + 'booking' + '/' + fileName,
+                Body: buffer,
+                ContentType: mimetype,
+              } as any;
+              
+              const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
+              imageUrl = (response as any)?.Location || '';
+              if (imageUrl) {
+                console.log('✅ AWS S3 upload successful:', imageUrl);
+                uploadSuccess = true;
+              }
+            } catch (s3Error: any) {
+              console.error('❌ AWS S3 upload also failed:', s3Error.message);
+            }
+          }
+          
+          // If all uploads failed
+          if (!uploadSuccess) {
+            console.error('❌ All upload methods failed - Supabase buckets unavailable and AWS config missing or failed');
+            console.log('⚠️ Image upload failed completely, skipping this image');
+            imageUrl = '';
           }
         }
         
