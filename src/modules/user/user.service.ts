@@ -1363,21 +1363,34 @@ export class UserService {
     this.sendOtp(email);
   }
   async resetPasswordMobile(dto: ResetPasswordMobileDto) {
-    const { email, newPassword } = dto;
+    try {
+      const { email, newPassword } = dto;
 
-    const user = await this.userRepository.findOneBy({
-      email: email,
-    });
-    if (!user) throw new NotFoundException('User not found');
-    user.password = await bcrypt.hash(newPassword, 10);
-    await this.userRepository.save(user);
-    // 4. send confirmation email
-    await this.mailerService.sendMail({
-      to: user.email,
-      subject: 'Password Reset Successful',
-      text: 'Your password has been reset successfully.',
-    });
-    return { message: 'Password reset successful' };
+      const user = await this.userRepository.findOne({ where: { email } });
+      if (!user) throw new NotFoundException('User not found');
+      
+      user.password = await bcrypt.hash(newPassword, 10);
+      await this.userRepository.save(user);
+      
+      // Send confirmation email using robust email service
+      console.log(`📧 Sending password reset confirmation email to ${user.email} using robust email service...`);
+      const emailSent = await this.robustEmailService.sendEmail(
+        user.email,
+        'Password Reset Successful',
+        'Your password has been reset successfully.'
+      );
+
+      if (emailSent) {
+        console.log(`✅ Password reset confirmation email sent successfully to ${user.email}`);
+      } else {
+        console.log(`📝 Password reset confirmation email for ${user.email} (Email delivery failed, but password reset is complete)`);
+      }
+      
+      return { message: 'Password reset successful' };
+    } catch (error) {
+      console.error('❌ Error in resetPasswordMobile:', error);
+      throw error;
+    }
   }
 
   async saveEnterpriseUser(dto: CreateEnterpriseUserDto): Promise<User> {
