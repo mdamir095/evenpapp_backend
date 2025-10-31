@@ -72,15 +72,54 @@ export class QuotationRequestService {
       console.log('✅ Quotation Request - Saved entity userId:', (savedEntity as any).userId, 'Type:', typeof (savedEntity as any).userId);
       console.log('✅ Quotation Request - Saved entity referenceImages (uploaded URLs):', (savedEntity as any).referenceImages);
       console.log('✅ Quotation Request - Saved entity referenceImages count:', (savedEntity as any).referenceImages?.length || 0);
+      console.log('✅ Quotation Request - Saved entity keys:', Object.keys(savedEntity));
+      
+      // Get referenceImages from multiple possible sources (MongoDB might store it differently)
+      const savedReferenceImages = (savedEntity as any).referenceImages || 
+                                   (savedEntity as any).referenceimages || 
+                                   uploadedImageUrls || 
+                                   [];
+      
+      console.log('✅ Quotation Request - Resolved referenceImages:', savedReferenceImages);
       
       // Ensure referenceImages are explicitly included in the response with uploaded URLs
-      const response = {
-        ...savedEntity,
-        referenceImages: (savedEntity as any).referenceImages || uploadedImageUrls || []
+      // Build response explicitly to ensure all fields are included
+      const response: any = {
+        id: (savedEntity as any)._id?.toString() || (savedEntity as any).id?.toString(),
+        _id: (savedEntity as any)._id || (savedEntity as any).id,
+        eventHall: (savedEntity as any).eventHall,
+        eventDate: (savedEntity as any).eventDate,
+        endDate: (savedEntity as any).endDate,
+        startTime: (savedEntity as any).startTime,
+        endTime: (savedEntity as any).endTime,
+        venueAddress: (savedEntity as any).venueAddress,
+        photographerType: (savedEntity as any).photographerType,
+        specialRequirement: (savedEntity as any).specialRequirement,
+        expectedGuests: (savedEntity as any).expectedGuests,
+        coverageDuration: (savedEntity as any).coverageDuration,
+        numberOfPhotographers: (savedEntity as any).numberOfPhotographers,
+        budgetRange: (savedEntity as any).budgetRange,
+        referenceImages: savedReferenceImages, // Explicitly set - MUST be included
+        status: (savedEntity as any).status,
+        userId: (savedEntity as any).userId,
+        vendorId: (savedEntity as any).vendorId,
+        venueId: (savedEntity as any).venueId,
+        quotationAmount: (savedEntity as any).quotationAmount,
+        notes: (savedEntity as any).notes,
+        createdAt: (savedEntity as any).createdAt,
+        updatedAt: (savedEntity as any).updatedAt,
+        isDeleted: (savedEntity as any).isDeleted,
       };
+      
+      // Also spread to catch any other fields
+      Object.assign(response, savedEntity);
+      // Override referenceImages again to ensure it's not overwritten
+      response.referenceImages = savedReferenceImages;
       
       console.log('✅ Quotation Request - Response referenceImages (uploaded URLs):', response.referenceImages);
       console.log('✅ Quotation Request - Response referenceImages count:', response.referenceImages?.length || 0);
+      console.log('✅ Quotation Request - Response keys:', Object.keys(response));
+      console.log('✅ Quotation Request - Response has referenceImages:', 'referenceImages' in response);
       
       return response;
     } catch (error) {
@@ -129,12 +168,37 @@ export class QuotationRequestService {
 
       console.log('Quotation Request Service - Found', total, 'quotation requests for userId:', userId);
       
+      // Log raw data from database to see what's being retrieved
+      if (data && data.length > 0) {
+        console.log('Quotation Request Service - Sample raw data from DB:', data.slice(0, 2).map((q: any) => ({
+          id: q._id || q.id,
+          hasReferenceImages: 'referenceImages' in q,
+          referenceImages: q.referenceImages,
+          referenceImagesType: typeof q.referenceImages,
+          referenceImagesIsArray: Array.isArray(q.referenceImages),
+          referenceImagesCount: Array.isArray(q.referenceImages) ? q.referenceImages.length : 0,
+          keys: Object.keys(q)
+        })));
+      }
+      
       // Process referenceImages for each quotation - filter out placeholder URLs and ensure proper format
       const processedData = data.map((quotation: any) => {
-        let referenceImages = quotation.referenceImages || [];
+        // Get referenceImages from the quotation - check multiple possible field names
+        let referenceImages = quotation.referenceImages || 
+                             quotation.referenceimages || 
+                             (quotation as any).reference_images || 
+                             [];
+        
+        console.log('Quotation Request Service - Processing quotation:', {
+          id: quotation._id || quotation.id,
+          originalReferenceImages: referenceImages,
+          originalType: typeof referenceImages,
+          originalIsArray: Array.isArray(referenceImages)
+        });
         
         if (Array.isArray(referenceImages)) {
           // Filter out placeholder URLs if any exist
+          const beforeFilter = referenceImages.length;
           referenceImages = referenceImages.filter((url: string) => {
             if (!url || typeof url !== 'string') {
               return false;
@@ -142,16 +206,40 @@ export class QuotationRequestService {
             // Keep only actual image URLs, not placeholder URLs
             return !url.includes('via.placeholder.com') && !url.includes('placeholder');
           });
+          console.log('Quotation Request Service - Filtered referenceImages:', {
+            id: quotation._id || quotation.id,
+            before: beforeFilter,
+            after: referenceImages.length,
+            urls: referenceImages
+          });
         } else {
           // If referenceImages is not an array, convert to array or set to empty
+          console.log('Quotation Request Service - referenceImages is not an array, converting to empty array:', {
+            id: quotation._id || quotation.id,
+            value: referenceImages
+          });
           referenceImages = [];
         }
         
         // Explicitly include referenceImages in the response
-        return {
+        const processedQuotation: any = {
           ...quotation,
           referenceImages: referenceImages, // Explicitly set processed referenceImages
         };
+        
+        // Ensure referenceImages is always explicitly set
+        if (!('referenceImages' in processedQuotation)) {
+          processedQuotation.referenceImages = referenceImages;
+        }
+        
+        console.log('Quotation Request Service - Processed quotation:', {
+          id: processedQuotation._id || processedQuotation.id,
+          hasReferenceImages: 'referenceImages' in processedQuotation,
+          referenceImages: processedQuotation.referenceImages,
+          referenceImagesCount: processedQuotation.referenceImages?.length || 0
+        });
+        
+        return processedQuotation;
       });
       
       // Log summary of referenceImages processing

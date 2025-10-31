@@ -40,10 +40,46 @@ export class QuotationRequestController {
     const quotationRequest = await this.quotationRequestService.create(createQuotationRequestDto, userId);
     
     // Log response to ensure referenceImages with uploaded URLs are included
-    console.log('Quotation Request Controller - Response referenceImages (uploaded URLs):', (quotationRequest as any).referenceImages);
-    console.log('Quotation Request Controller - Response referenceImages count:', (quotationRequest as any).referenceImages?.length || 0);
+    console.log('Quotation Request Controller - Service response referenceImages:', (quotationRequest as any).referenceImages);
+    console.log('Quotation Request Controller - Service response referenceImages count:', (quotationRequest as any).referenceImages?.length || 0);
+    console.log('Quotation Request Controller - Service response keys:', Object.keys(quotationRequest as any));
+    console.log('Quotation Request Controller - Service response has referenceImages:', 'referenceImages' in (quotationRequest as any));
     
-    return quotationRequest as any;
+    // Explicitly ensure referenceImages are included in the response
+    // Get referenceImages from the service response - handle all possible cases
+    let serviceReferenceImages = (quotationRequest as any).referenceImages;
+    
+    // Ensure it's always an array
+    if (!serviceReferenceImages) {
+      serviceReferenceImages = [];
+    }
+    if (!Array.isArray(serviceReferenceImages)) {
+      serviceReferenceImages = [];
+    }
+    
+    // Build response object with referenceImages explicitly set
+    const response: any = {
+      ...quotationRequest,
+      referenceImages: serviceReferenceImages // Explicitly set - MUST be included
+    };
+    
+    // Ensure referenceImages property exists and is an array
+    if (!('referenceImages' in response)) {
+      response.referenceImages = serviceReferenceImages;
+    }
+    if (!Array.isArray(response.referenceImages)) {
+      response.referenceImages = serviceReferenceImages;
+    }
+    
+    console.log('Quotation Request Controller - Final response referenceImages:', response.referenceImages);
+    console.log('Quotation Request Controller - Final response referenceImages count:', response.referenceImages?.length || 0);
+    console.log('Quotation Request Controller - Final response has referenceImages:', 'referenceImages' in response);
+    console.log('Quotation Request Controller - Final response type:', typeof response);
+    console.log('Quotation Request Controller - Final response referenceImages type:', typeof response.referenceImages);
+    console.log('Quotation Request Controller - Final response referenceImages is array:', Array.isArray(response.referenceImages));
+    
+    // Return the response directly - ClassSerializerInterceptor will handle serialization based on @Expose() decorators
+    return response;
   }
 
   @Get('quotation-requests')
@@ -75,14 +111,44 @@ export class QuotationRequestController {
     // Force filter by logged-in user's ID (ignore any userId query parameter for security)
     const result = await this.quotationRequestService.findAll(page, limit, userId, search);
     
-    // Log referenceImages in response for debugging
+    // Explicitly ensure referenceImages are included in each quotation response
     if (result.data && result.data.length > 0) {
+      result.data = result.data.map((quotation: any) => {
+        // Get referenceImages from the quotation, ensuring it's always an array
+        let referenceImages = quotation.referenceImages;
+        
+        if (!referenceImages) {
+          referenceImages = [];
+        }
+        if (!Array.isArray(referenceImages)) {
+          referenceImages = [];
+        }
+        
+        // Build response object with referenceImages explicitly set
+        const processedQuotation: any = {
+          ...quotation,
+          referenceImages: referenceImages // Explicitly set - MUST be included
+        };
+        
+        // Ensure referenceImages property exists and is an array
+        if (!('referenceImages' in processedQuotation)) {
+          processedQuotation.referenceImages = referenceImages;
+        }
+        if (!Array.isArray(processedQuotation.referenceImages)) {
+          processedQuotation.referenceImages = referenceImages;
+        }
+        
+        return processedQuotation;
+      });
+      
+      // Log referenceImages in response for debugging
       console.log('Quotation Request Controller - Sample referenceImages from response:', result.data.slice(0, 2).map((q: any) => ({
         id: q._id || q.id,
         referenceImages: q.referenceImages,
         referenceImagesCount: q.referenceImages?.length || 0,
         referenceImagesType: typeof q.referenceImages,
-        referenceImagesIsArray: Array.isArray(q.referenceImages)
+        referenceImagesIsArray: Array.isArray(q.referenceImages),
+        hasReferenceImages: 'referenceImages' in q
       })));
     }
     
