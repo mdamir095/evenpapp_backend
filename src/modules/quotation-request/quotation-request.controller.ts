@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Delete, Body, Param, Query, UseInterceptors, ClassSerializerInterceptor, UseGuards, BadRequestException, UploadedFile } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, Param, Query, UseInterceptors, ClassSerializerInterceptor, UseGuards, BadRequestException, UploadedFile, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthGuard } from '@nestjs/passport';
@@ -33,10 +33,10 @@ export class QuotationRequestController {
   }
 
   @Get('quotation-requests')
-  @ApiOperation({ summary: 'Get all quotation requests for a user' })
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get all quotation requests for the logged-in user' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of items per page' })
-  @ApiQuery({ name: 'userId', required: false, type: String, description: 'User ID to filter requests' })
   @ApiQuery({
     name: 'search',
     required: false,
@@ -49,11 +49,16 @@ export class QuotationRequestController {
     description: 'Quotation requests retrieved successfully',
   })
   async getQuotationRequests(
+    @Req() req: any,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
-    @Query('userId') userId?: string,
     @Query('search') search?: string,
   ) {
+    // Extract user ID from JWT token - users should only see their own quotation requests
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    console.log('Quotation Request Controller - User ID for getQuotationRequests:', userId, 'Type:', typeof userId);
+    
+    // Force filter by logged-in user's ID (ignore any userId query parameter for security)
     return await this.quotationRequestService.findAll(page, limit, userId, search);
   }
 

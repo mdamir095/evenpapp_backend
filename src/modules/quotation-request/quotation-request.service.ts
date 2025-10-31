@@ -54,10 +54,22 @@ export class QuotationRequestService {
 
   async findAll(page = 1, limit = 10, userId?: string, search?: string): Promise<{ data: QuotationRequest[]; total: number; page: number; limit: number }> {
     try {
-      const where: any = { isDeleted: false };
+      console.log('Quotation Request Service - findAll called with userId:', userId, 'Type:', typeof userId);
+      
+      // Always filter by userId for security - users should only see their own quotation requests
+      const where: any = { 
+        isDeleted: false,
+      };
+      
       if (userId) {
-        where.userId = userId;
+        where.userId = userId; // Filter by logged-in user's ID
+        console.log('Quotation Request Service - Filtering by userId:', userId);
+      } else {
+        console.log('⚠️ Quotation Request Service - No userId provided, this should not happen for protected endpoints');
+        // For security, if no userId provided, return empty result
+        return { data: [], total: 0, page, limit };
       }
+      
       if (search && search.trim().length > 0) {
         const regex = new RegExp(search, 'i');
         where.$or = [
@@ -66,6 +78,8 @@ export class QuotationRequestService {
         ];
       }
 
+      console.log('Quotation Request Service - Query where clause:', JSON.stringify(where, null, 2));
+
       const [data, total] = await this.repo.findAndCount({
         where,
         skip: (page - 1) * limit,
@@ -73,8 +87,10 @@ export class QuotationRequestService {
         order: { createdAt: 'DESC' as any },
       });
 
+      console.log('Quotation Request Service - Found', total, 'quotation requests for userId:', userId);
       return { data, total, page, limit };
     } catch (error) {
+      console.error('Quotation Request Service - Error in findAll:', error);
       throw new Error(`Failed to fetch quotation requests: ${error.message}`);
     }
   }
