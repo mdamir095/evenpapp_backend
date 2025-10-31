@@ -643,22 +643,31 @@ export class BookingService {
   }
 
   async createRequestBooking(dto: CreateRequestBookingDto, userId: string): Promise<Booking> {
-    if (!dto.bookingType) {
-      throw new BadRequestException('bookingType is required');
-    }
-    
-    // Ensure userId is a string
-    const userIdString = String(userId);
-    console.log('Booking Service - User ID:', userIdString, 'Type:', typeof userIdString);
-    
-    let uploadedImageUrls: string[] = [];
-    if (dto.referenceImages?.length) {
-      console.log(`📸 Processing ${dto.referenceImages.length} reference images for booking...`);
-      uploadedImageUrls = await this.uploadBase64Images(dto.referenceImages);
-      console.log(`✅ Successfully uploaded ${uploadedImageUrls.length} reference images:`, uploadedImageUrls);
-    } else {
-      console.log('📸 No reference images provided in booking request');
-    }
+    try {
+      if (!dto.bookingType) {
+        throw new BadRequestException('bookingType is required');
+      }
+      
+      // Ensure userId is a string
+      const userIdString = String(userId);
+      console.log('Booking Service - User ID:', userIdString, 'Type:', typeof userIdString);
+      
+      let uploadedImageUrls: string[] = [];
+      if (dto.referenceImages?.length) {
+        console.log(`📸 Processing ${dto.referenceImages.length} reference images for booking...`);
+        try {
+          uploadedImageUrls = await this.uploadBase64Images(dto.referenceImages);
+          console.log(`✅ Successfully uploaded ${uploadedImageUrls.length} reference images:`, uploadedImageUrls);
+        } catch (uploadError: any) {
+          console.error('❌ Error during image upload process:', uploadError.message);
+          console.error('❌ Upload error stack:', uploadError.stack);
+          // Continue with empty array if upload fails - don't block booking creation
+          uploadedImageUrls = [];
+          console.log('⚠️ Continuing with booking creation without images due to upload error');
+        }
+      } else {
+        console.log('📸 No reference images provided in booking request');
+      }
 
     const entity = this.bookingRepo.create({
       ...dto,
@@ -700,12 +709,18 @@ export class BookingService {
     // Override referenceImages again to ensure it's not overwritten
     response.referenceImages = Array.isArray(savedReferenceImages) ? savedReferenceImages : uploadedImageUrls || [];
     
-    console.log('Booking Service - Response referenceImages (uploaded URLs):', response.referenceImages);
-    console.log('Booking Service - Response referenceImages count:', response.referenceImages?.length || 0);
-    console.log('Booking Service - Response keys:', Object.keys(response));
-    console.log('Booking Service - Response has referenceImages:', 'referenceImages' in response);
-    
-    return response;
+      console.log('Booking Service - Response referenceImages (uploaded URLs):', response.referenceImages);
+      console.log('Booking Service - Response referenceImages count:', response.referenceImages?.length || 0);
+      console.log('Booking Service - Response keys:', Object.keys(response));
+      console.log('Booking Service - Response has referenceImages:', 'referenceImages' in response);
+      
+      return response;
+    } catch (error: any) {
+      console.error('❌ Error in createRequestBooking:', error.message);
+      console.error('❌ Error stack:', error.stack);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      throw new BadRequestException(`Failed to create booking: ${error.message}`);
+    }
   }
 
   async updateBooking(bookingId: string, dto: any, userId: string): Promise<any> {
@@ -729,7 +744,17 @@ export class BookingService {
     }
     let uploadedImageUrls: string[] = [];
     if (dto.referenceImages?.length) {
-      uploadedImageUrls = await this.uploadBase64Images(dto.referenceImages);
+      try {
+        console.log(`📸 Processing ${dto.referenceImages.length} reference images for booking update...`);
+        uploadedImageUrls = await this.uploadBase64Images(dto.referenceImages);
+        console.log(`✅ Successfully uploaded ${uploadedImageUrls.length} reference images for update:`, uploadedImageUrls);
+      } catch (uploadError: any) {
+        console.error('❌ Error during image upload process in update:', uploadError.message);
+        console.error('❌ Upload error stack:', uploadError.stack);
+        // Continue with empty array if upload fails - don't block booking update
+        uploadedImageUrls = [];
+        console.log('⚠️ Continuing with booking update without images due to upload error');
+      }
     }
 
     const updateData: any = { ...dto };
@@ -750,6 +775,19 @@ export class BookingService {
       { $set: updateData }
     );
     return await this.findByBookingId(bookingId);
+  }
+
+  // Helper function to wrap upload with timeout
+  private async uploadWithTimeout(
+    uploadPromise: Promise<any>,
+    timeoutMs: number = 30000 // 30 seconds timeout
+  ): Promise<any> {
+    return Promise.race([
+      uploadPromise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Upload timeout after ${timeoutMs}ms`)), timeoutMs)
+      )
+    ]);
   }
 
   private async uploadBase64Images(base64Images: string[]): Promise<string[]> {
@@ -796,13 +834,16 @@ export class BookingService {
             for (const bucket of supabaseBuckets) {
               try {
                 console.log(`☁️ Image ${imageIndex}/${base64Images.length}: Trying Supabase bucket: ${bucket}`);
-                const { publicUrl } = await this.supabaseService.upload({
-                  filePath: `booking/${fileName}`,
-                  file: buffer,
-                  contentType: mimetype,
-                  bucket: bucket,
-                  upsert: true,
-                });
+                const { publicUrl } = await this.uploadWithTimeout(
+                  this.supabaseService.upload({
+                    filePath: `booking/${fileName}`,
+                    file: buffer,
+                    contentType: mimetype,
+                    bucket: bucket,
+                    upsert: true,
+                  }),
+                  30000 // 30 second timeout per upload
+                );
                 if (publicUrl) {
                   imageUrl = publicUrl;
                   console.log(`✅ Image ${imageIndex}/${base64Images.length}: Supabase upload successful (bucket: ${bucket}):`, imageUrl);
@@ -823,13 +864,16 @@ export class BookingService {
             for (const bucket of supabaseBuckets) {
               try {
                 console.log(`☁️ Image ${imageIndex}/${base64Images.length}: Trying Supabase bucket: ${bucket}`);
-                const { publicUrl } = await this.supabaseService.upload({
-                  filePath: `booking/${fileName}`,
-                  file: buffer,
-                  contentType: mimetype,
-                  bucket: bucket,
-                  upsert: true,
-                });
+                const { publicUrl } = await this.uploadWithTimeout(
+                  this.supabaseService.upload({
+                    filePath: `booking/${fileName}`,
+                    file: buffer,
+                    contentType: mimetype,
+                    bucket: bucket,
+                    upsert: true,
+                  }),
+                  30000 // 30 second timeout per upload
+                );
                 if (publicUrl) {
                   imageUrl = publicUrl;
                   console.log(`✅ Image ${imageIndex}/${base64Images.length}: Supabase upload successful (bucket: ${bucket}):`, imageUrl);
@@ -879,11 +923,21 @@ export class BookingService {
           } else {
             console.log(`⚠️ Image ${imageIndex}/${base64Images.length}: Skipping image due to upload failure`);
           }
+          
+          // Add a delay between uploads to avoid rate limiting (except for the last image)
+          // Increased delay to 500ms to prevent rate limiting with multiple images
+          if (imageIndex < base64Images.length) {
+            await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between uploads
+          }
         } catch (imageError: any) {
           // Catch any error during image processing and continue with next image
           console.error(`❌ Image ${imageIndex}/${base64Images.length}: Error processing image:`, imageError.message);
           console.error(`❌ Image ${imageIndex}/${base64Images.length}: Error stack:`, imageError.stack);
           // Continue processing other images
+          // Still add delay even on error to avoid rate limiting
+          if (imageIndex < base64Images.length) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
       }
       

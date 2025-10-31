@@ -481,6 +481,19 @@ export class QuotationRequestService {
     }
   }
 
+  // Helper function to wrap upload with timeout
+  private async uploadWithTimeout(
+    uploadPromise: Promise<any>,
+    timeoutMs: number = 30000 // 30 seconds timeout
+  ): Promise<any> {
+    return Promise.race([
+      uploadPromise,
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Upload timeout after ${timeoutMs}ms`)), timeoutMs)
+      )
+    ]);
+  }
+
   private async uploadBase64Images(base64Images: string[]): Promise<string[]> {
     try {
       console.log(`📸 Uploading ${base64Images.length} reference images for quotation request...`);
@@ -525,13 +538,16 @@ export class QuotationRequestService {
             for (const bucket of supabaseBuckets) {
               try {
                 console.log(`☁️ Image ${imageIndex}/${base64Images.length}: Trying Supabase bucket: ${bucket}`);
-                const { publicUrl } = await this.supabaseService.upload({
-                  filePath: `quotation/${fileName}`,
-                  file: buffer,
-                  contentType: mimetype,
-                  bucket: bucket,
-                  upsert: true,
-                });
+                const { publicUrl } = await this.uploadWithTimeout(
+                  this.supabaseService.upload({
+                    filePath: `quotation/${fileName}`,
+                    file: buffer,
+                    contentType: mimetype,
+                    bucket: bucket,
+                    upsert: true,
+                  }),
+                  30000 // 30 second timeout per upload
+                );
                 if (publicUrl) {
                   imageUrl = publicUrl;
                   console.log(`✅ Image ${imageIndex}/${base64Images.length}: Supabase upload successful (bucket: ${bucket}):`, imageUrl);
@@ -552,13 +568,16 @@ export class QuotationRequestService {
             for (const bucket of supabaseBuckets) {
               try {
                 console.log(`☁️ Image ${imageIndex}/${base64Images.length}: Trying Supabase bucket: ${bucket}`);
-                const { publicUrl } = await this.supabaseService.upload({
-                  filePath: `quotation/${fileName}`,
-                  file: buffer,
-                  contentType: mimetype,
-                  bucket: bucket,
-                  upsert: true,
-                });
+                const { publicUrl } = await this.uploadWithTimeout(
+                  this.supabaseService.upload({
+                    filePath: `quotation/${fileName}`,
+                    file: buffer,
+                    contentType: mimetype,
+                    bucket: bucket,
+                    upsert: true,
+                  }),
+                  30000 // 30 second timeout per upload
+                );
                 if (publicUrl) {
                   imageUrl = publicUrl;
                   console.log(`✅ Image ${imageIndex}/${base64Images.length}: Supabase upload successful (bucket: ${bucket}):`, imageUrl);
@@ -608,11 +627,21 @@ export class QuotationRequestService {
           } else {
             console.log(`⚠️ Image ${imageIndex}/${base64Images.length}: Skipping image due to upload failure`);
           }
+          
+          // Add a delay between uploads to avoid rate limiting (except for the last image)
+          // Increased delay to 500ms to prevent rate limiting with multiple images
+          if (imageIndex < base64Images.length) {
+            await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between uploads
+          }
         } catch (imageError: any) {
           // Catch any error during image processing and continue with next image
           console.error(`❌ Image ${imageIndex}/${base64Images.length}: Error processing image:`, imageError.message);
           console.error(`❌ Image ${imageIndex}/${base64Images.length}: Error stack:`, imageError.stack);
           // Continue processing other images
+          // Still add delay even on error to avoid rate limiting
+          if (imageIndex < base64Images.length) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
       }
       

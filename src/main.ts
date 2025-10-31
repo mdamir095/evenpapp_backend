@@ -7,10 +7,20 @@ import { LoggerService } from '@core/logger/logger.service';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EmailService } from '@shared/email/email.service';
 import { ResponseInterceptor } from '@common/interceptors/response/response.interceptor';
+import * as express from 'express';
 
 async function bootstrap() {
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: true,
+    rawBody: false,
+  });
+  
+  // Increase body size limit for large image uploads (50MB)
+  // Get the underlying Express instance and configure body parser limits
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.use(express.json({ limit: '50mb' }));
+  expressApp.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Note: Multer configuration is handled by FileInterceptor in controllers
 
