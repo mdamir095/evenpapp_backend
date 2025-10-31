@@ -483,18 +483,26 @@ export class QuotationRequestService {
 
   private async uploadBase64Images(base64Images: string[]): Promise<string[]> {
     try {
-      console.log('📸 Uploading reference images for quotation request...');
+      console.log(`📸 Uploading ${base64Images.length} reference images for quotation request...`);
       const uploadedUrls: string[] = [];
       const awsConfig = this.configService.get('aws');
       const hasAwsConfig = awsConfig && awsConfig.bucketName && awsConfig.bucketFolderName;
       
-      for (const base64Image of base64Images) {
-        if (!base64Image) continue;
+      for (let i = 0; i < base64Images.length; i++) {
+        const base64Image = base64Images[i];
+        const imageIndex = i + 1;
         
-        const matches = base64Image.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
-        if (!matches) {
-          throw new BadRequestException('Invalid base64 image format');
+        if (!base64Image) {
+          console.log(`⚠️ Skipping image ${imageIndex}/${base64Images.length}: empty base64 data`);
+          continue;
         }
+        
+        try {
+          const matches = base64Image.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
+          if (!matches) {
+            console.error(`❌ Image ${imageIndex}/${base64Images.length}: Invalid base64 image format`);
+            continue; // Skip invalid images instead of throwing
+          }
         
         const ext = matches[1];
         const base64Data = matches[2];
@@ -505,99 +513,106 @@ export class QuotationRequestService {
           .toString(36)
           .substring(7)}.${ext}`;
 
-        console.log('📁 Processing reference image:', { ext, mimetype, fileName, size: buffer.length });
+          console.log(`📁 Processing image ${imageIndex}/${base64Images.length}:`, { ext, mimetype, fileName, size: buffer.length });
 
-        let imageUrl = '';
-        let uploadSuccess = false;
-        
-        if (process.env.NODE_ENV === 'local') {
-          console.log('🏠 Using Supabase for local development (same as profile uploads)');
-          // Use Supabase with 'profiles' bucket (same as profile uploads)
-          const supabaseBuckets = ['profiles', 'uploads'];
-          for (const bucket of supabaseBuckets) {
-            try {
-              console.log(`☁️ Trying Supabase bucket: ${bucket}`);
-              const { publicUrl } = await this.supabaseService.upload({
-                filePath: `quotation/${fileName}`,
-                file: buffer,
-                contentType: mimetype,
-                bucket: bucket,
-                upsert: true,
-              });
-              if (publicUrl) {
-                imageUrl = publicUrl;
-                console.log(`✅ Supabase upload successful (bucket: ${bucket}):`, imageUrl);
-                uploadSuccess = true;
-                break;
+          let imageUrl = '';
+          let uploadSuccess = false;
+          
+          if (process.env.NODE_ENV === 'local') {
+            console.log(`🏠 Image ${imageIndex}/${base64Images.length}: Using Supabase for local development (same as profile uploads)`);
+            // Use Supabase with 'profiles' bucket (same as profile uploads)
+            const supabaseBuckets = ['profiles', 'uploads'];
+            for (const bucket of supabaseBuckets) {
+              try {
+                console.log(`☁️ Image ${imageIndex}/${base64Images.length}: Trying Supabase bucket: ${bucket}`);
+                const { publicUrl } = await this.supabaseService.upload({
+                  filePath: `quotation/${fileName}`,
+                  file: buffer,
+                  contentType: mimetype,
+                  bucket: bucket,
+                  upsert: true,
+                });
+                if (publicUrl) {
+                  imageUrl = publicUrl;
+                  console.log(`✅ Image ${imageIndex}/${base64Images.length}: Supabase upload successful (bucket: ${bucket}):`, imageUrl);
+                  uploadSuccess = true;
+                  break;
+                }
+              } catch (supabaseError: any) {
+                console.log(`⚠️ Image ${imageIndex}/${base64Images.length}: Supabase bucket ${bucket} failed:`, supabaseError.message);
+                continue;
               }
-            } catch (supabaseError: any) {
-              console.log(`⚠️ Supabase bucket ${bucket} failed:`, supabaseError.message);
-              continue;
+            }
+          } else {
+            // Production: Try Supabase first (same as profile uploads), then AWS S3 as fallback
+            console.log(`☁️ Image ${imageIndex}/${base64Images.length}: Using Supabase for production (same as profile uploads)`);
+            
+            // Try Supabase first with 'profiles' bucket (same as profile uploads)
+            const supabaseBuckets = ['profiles', 'uploads'];
+            for (const bucket of supabaseBuckets) {
+              try {
+                console.log(`☁️ Image ${imageIndex}/${base64Images.length}: Trying Supabase bucket: ${bucket}`);
+                const { publicUrl } = await this.supabaseService.upload({
+                  filePath: `quotation/${fileName}`,
+                  file: buffer,
+                  contentType: mimetype,
+                  bucket: bucket,
+                  upsert: true,
+                });
+                if (publicUrl) {
+                  imageUrl = publicUrl;
+                  console.log(`✅ Image ${imageIndex}/${base64Images.length}: Supabase upload successful (bucket: ${bucket}):`, imageUrl);
+                  uploadSuccess = true;
+                  break;
+                }
+              } catch (supabaseError: any) {
+                console.log(`⚠️ Image ${imageIndex}/${base64Images.length}: Supabase bucket ${bucket} failed:`, supabaseError.message);
+                continue;
+              }
+            }
+            
+            // If Supabase failed, try AWS S3 as fallback (only if configured)
+            if (!uploadSuccess && hasAwsConfig) {
+              try {
+                console.log(`☁️ Image ${imageIndex}/${base64Images.length}: Trying AWS S3 as fallback`);
+                const awsUploadReqDto = {
+                  Bucket: awsConfig.bucketName,
+                  Key: awsConfig.bucketFolderName + '/' + 'quotation' + '/' + fileName,
+                  Body: buffer,
+                  ContentType: mimetype,
+                } as any;
+                
+                const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
+                imageUrl = (response as any)?.Location || '';
+                if (imageUrl) {
+                  console.log(`✅ Image ${imageIndex}/${base64Images.length}: AWS S3 upload successful:`, imageUrl);
+                  uploadSuccess = true;
+                }
+              } catch (s3Error: any) {
+                console.error(`❌ Image ${imageIndex}/${base64Images.length}: AWS S3 upload also failed:`, s3Error.message);
+              }
+            }
+            
+            // If all uploads failed
+            if (!uploadSuccess) {
+              console.error(`❌ Image ${imageIndex}/${base64Images.length}: All upload methods failed - Supabase buckets unavailable and AWS config missing or failed`);
+              console.log(`⚠️ Image ${imageIndex}/${base64Images.length}: Image upload failed completely, skipping this image`);
+              imageUrl = '';
             }
           }
-        } else {
-          // Production: Try Supabase first (same as profile uploads), then AWS S3 as fallback
-          console.log('☁️ Using Supabase for production (same as profile uploads)');
           
-          // Try Supabase first with 'profiles' bucket (same as profile uploads)
-          const supabaseBuckets = ['profiles', 'uploads'];
-          for (const bucket of supabaseBuckets) {
-            try {
-              console.log(`☁️ Trying Supabase bucket: ${bucket}`);
-              const { publicUrl } = await this.supabaseService.upload({
-                filePath: `quotation/${fileName}`,
-                file: buffer,
-                contentType: mimetype,
-                bucket: bucket,
-                upsert: true,
-              });
-              if (publicUrl) {
-                imageUrl = publicUrl;
-                console.log(`✅ Supabase upload successful (bucket: ${bucket}):`, imageUrl);
-                uploadSuccess = true;
-                break;
-              }
-            } catch (supabaseError: any) {
-              console.log(`⚠️ Supabase bucket ${bucket} failed:`, supabaseError.message);
-              continue;
-            }
+          // Only add non-empty URLs (skip failed uploads)
+          if (imageUrl && imageUrl.trim() !== '') {
+            uploadedUrls.push(imageUrl);
+            console.log(`✅ Image ${imageIndex}/${base64Images.length}: Successfully added to upload list`);
+          } else {
+            console.log(`⚠️ Image ${imageIndex}/${base64Images.length}: Skipping image due to upload failure`);
           }
-          
-          // If Supabase failed, try AWS S3 as fallback (only if configured)
-          if (!uploadSuccess && hasAwsConfig) {
-            try {
-              console.log('☁️ Trying AWS S3 as fallback');
-              const awsUploadReqDto = {
-                Bucket: awsConfig.bucketName,
-                Key: awsConfig.bucketFolderName + '/' + 'quotation' + '/' + fileName,
-                Body: buffer,
-                ContentType: mimetype,
-              } as any;
-              
-              const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
-              imageUrl = (response as any)?.Location || '';
-              if (imageUrl) {
-                console.log('✅ AWS S3 upload successful:', imageUrl);
-                uploadSuccess = true;
-              }
-            } catch (s3Error: any) {
-              console.error('❌ AWS S3 upload also failed:', s3Error.message);
-            }
-          }
-          
-          // If all uploads failed
-          if (!uploadSuccess) {
-            console.error('❌ All upload methods failed - Supabase buckets unavailable and AWS config missing or failed');
-            console.log('⚠️ Image upload failed completely, skipping this image');
-            imageUrl = '';
-          }
-        }
-        
-        // Only add non-empty URLs (skip failed uploads)
-        if (imageUrl && imageUrl.trim() !== '') {
-          uploadedUrls.push(imageUrl);
-        } else {
-          console.log('⚠️ Skipping image due to upload failure');
+        } catch (imageError: any) {
+          // Catch any error during image processing and continue with next image
+          console.error(`❌ Image ${imageIndex}/${base64Images.length}: Error processing image:`, imageError.message);
+          console.error(`❌ Image ${imageIndex}/${base64Images.length}: Error stack:`, imageError.stack);
+          // Continue processing other images
         }
       }
       
