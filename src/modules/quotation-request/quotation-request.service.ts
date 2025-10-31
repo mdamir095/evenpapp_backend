@@ -30,9 +30,14 @@ export class QuotationRequestService {
     this.awsConfig = this.configService.get('aws');
   }
 
-  async create(dto: CreateQuotationRequestDto): Promise<QuotationRequest> {
+  async create(dto: CreateQuotationRequestDto, userId: string): Promise<QuotationRequest> {
     try {
       console.log('📝 Creating quotation request...');
+      console.log('📝 Quotation Request - User ID:', userId, 'Type:', typeof userId);
+      
+      // Ensure userId is a string
+      const userIdString = String(userId);
+      
       let uploadedImageUrls: string[] = [];
     
       if (dto.referenceImages && dto.referenceImages.length > 0) {
@@ -49,6 +54,7 @@ export class QuotationRequestService {
 
       const entity = this.repo.create({
         ...dto,
+        userId: userIdString, // Explicitly set userId from JWT token
         referenceImages: uploadedImageUrls,
         eventDate: new Date(dto.eventDate),
         endDate: new Date(dto.endDate),
@@ -57,8 +63,12 @@ export class QuotationRequestService {
       });
 
       console.log('💾 Saving quotation request to database...');
+      console.log('💾 Quotation Request - Entity userId:', (entity as any).userId, 'Type:', typeof (entity as any).userId);
+      
       const savedEntity = await this.repo.save(entity);
       console.log('✅ Quotation request created successfully:', (savedEntity as any)._id || (savedEntity as any).id);
+      console.log('✅ Quotation Request - Saved entity userId:', (savedEntity as any).userId, 'Type:', typeof (savedEntity as any).userId);
+      
       return savedEntity;
     } catch (error) {
       console.error('❌ Error creating quotation request:', error);
@@ -76,8 +86,11 @@ export class QuotationRequestService {
       };
       
       if (userId) {
-        where.userId = userId; // Filter by logged-in user's ID
-        console.log('Quotation Request Service - Filtering by userId:', userId);
+        // Filter by logged-in user's ID - handle both string and ObjectId formats
+        const userIdString = String(userId);
+        where.userId = userIdString;
+        console.log('Quotation Request Service - Filtering by userId:', userIdString);
+        console.log('Quotation Request Service - userId type:', typeof userIdString);
       } else {
         console.log('⚠️ Quotation Request Service - No userId provided, this should not happen for protected endpoints');
         // For security, if no userId provided, return empty result
@@ -102,6 +115,25 @@ export class QuotationRequestService {
       });
 
       console.log('Quotation Request Service - Found', total, 'quotation requests for userId:', userId);
+      
+      // Debug: Log userIds from found quotations to see format
+      if (data && data.length > 0) {
+        console.log('Quotation Request Service - Sample userIds from results:', data.slice(0, 3).map((q: any) => ({
+          id: q._id || q.id,
+          userId: q.userId,
+          userIdType: typeof q.userId
+        })));
+      } else {
+        console.log('⚠️ Quotation Request Service - No quotations found. Checking if quotations exist without userId...');
+        // Debug query to see if any quotations exist at all
+        const allQuotations = await this.repo.find({ where: { isDeleted: false }, take: 5 });
+        console.log('Quotation Request Service - Sample quotations (first 5, any userId):', allQuotations.map((q: any) => ({
+          id: q._id || q.id,
+          userId: q.userId,
+          hasUserId: !!q.userId,
+          userIdType: typeof q.userId
+        })));
+      }
       return { data, total, page, limit };
     } catch (error) {
       console.error('Quotation Request Service - Error in findAll:', error);

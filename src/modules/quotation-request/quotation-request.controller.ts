@@ -13,6 +13,7 @@ export class QuotationRequestController {
   constructor(private readonly quotationRequestService: QuotationRequestService) {}
 
   @Post('requestquation')
+  @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Create a new quotation request' })
   @ApiResponse({
     status: 201,
@@ -27,8 +28,15 @@ export class QuotationRequestController {
     status: 500,
     description: 'Internal server error',
   })
-  async createQuotationRequest(@Body() createQuotationRequestDto: CreateQuotationRequestDto): Promise<QuotationRequestResponseDto> {
-    const quotationRequest = await this.quotationRequestService.create(createQuotationRequestDto);
+  async createQuotationRequest(
+    @Body() createQuotationRequestDto: CreateQuotationRequestDto,
+    @Req() req: any,
+  ): Promise<QuotationRequestResponseDto> {
+    // Extract user ID from JWT token
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    console.log('Quotation Request Controller - User ID for create:', userId, 'Type:', typeof userId);
+    
+    const quotationRequest = await this.quotationRequestService.create(createQuotationRequestDto, userId);
     return quotationRequest as any;
   }
 
