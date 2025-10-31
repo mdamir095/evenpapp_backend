@@ -87,7 +87,8 @@ export class UserService {
         featureIds: [new ObjectId(userFeature.id)],
       });
     }
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // TODO: Hardcoded OTP until email functionality is working - change back to random generation
+    const otp = '111111'; // Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     const user = this.userRepository.create({
@@ -252,7 +253,8 @@ export class UserService {
   }
 
   async sendOtp(email: string) {
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // TODO: Hardcoded OTP until email functionality is working - change back to random generation
+    const otp = '111111'; // Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
     // Find the user by email

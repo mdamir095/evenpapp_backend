@@ -99,7 +99,8 @@ export class AuthService {
     //     return this.signinJwt(user);
     // }
     async sendPhoneOtp(dto: SendPhoneOtpDto) {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        // TODO: Hardcoded OTP until email functionality is working - change back to random generation
+        const otp = '111111'; // Math.floor(100000 + Math.random() * 900000).toString();
         const expireAt = new Date(Date.now() + 5 * 60 * 1000);
     
         let user = await this.userService.findByPhoneNumber(dto.countryCode,dto.phoneNumber);
