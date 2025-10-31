@@ -7,6 +7,7 @@ import { EventType } from './entity/event-type.entity';
 import { PhotographyType } from './entity/photography-type.entity';
 import { CreateQuotationRequestDto } from './dto/request/create-quotation-request.dto';
 import { AwsS3Service } from '@core/aws/services/aws-s3.service';
+import { SupabaseService } from '@shared/modules/supabase/supabase.service';
 import { ObjectId } from 'mongodb';
 import path from 'path';
 import fs from 'fs';
@@ -24,16 +25,26 @@ export class QuotationRequestService {
     private readonly photographyTypeRepo: MongoRepository<PhotographyType>,
     private readonly configService: ConfigService,
     private readonly awsS3Service: AwsS3Service,
+    private readonly supabaseService: SupabaseService,
   ) {
     this.awsConfig = this.configService.get('aws');
   }
 
   async create(dto: CreateQuotationRequestDto): Promise<QuotationRequest> {
     try {
+      console.log('📝 Creating quotation request...');
       let uploadedImageUrls: string[] = [];
     
       if (dto.referenceImages && dto.referenceImages.length > 0) {
-        uploadedImageUrls = await this.uploadBase64Images(dto.referenceImages);
+        console.log(`📸 Processing ${dto.referenceImages.length} reference images...`);
+        try {
+          uploadedImageUrls = await this.uploadBase64Images(dto.referenceImages);
+          console.log(`✅ Successfully processed ${uploadedImageUrls.length} reference images`);
+        } catch (uploadError) {
+          console.error('❌ Error uploading reference images:', uploadError);
+          // Continue with empty array if image upload fails - don't block quotation creation
+          uploadedImageUrls = [];
+        }
       }
 
       const entity = this.repo.create({
@@ -45,9 +56,12 @@ export class QuotationRequestService {
         isDeleted: false,
       });
 
+      console.log('💾 Saving quotation request to database...');
       const savedEntity = await this.repo.save(entity);
+      console.log('✅ Quotation request created successfully:', (savedEntity as any)._id || (savedEntity as any).id);
       return savedEntity;
     } catch (error) {
+      console.error('❌ Error creating quotation request:', error);
       throw new Error(`Failed to create quotation request: ${error.message}`);
     }
   }
@@ -300,56 +314,94 @@ export class QuotationRequestService {
     }
   }
 
-  async uploadBase64Images(base64Images: string[]): Promise<string[]> {
-    const uploadedUrls: string[] = [];
-    
-    for (const base64Image of base64Images) {
-      if (!base64Image) continue;
+  private async uploadBase64Images(base64Images: string[]): Promise<string[]> {
+    try {
+      console.log('📸 Uploading reference images for quotation request...');
+      const uploadedUrls: string[] = [];
+      const awsConfig = this.configService.get('aws');
       
-      const matches = base64Image.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
-      if (!matches) {
-        throw new BadRequestException('Invalid base64 image format');
-      }
-
-      const ext = matches[1];
-      const base64Data = matches[2];
-      const buffer = Buffer.from(base64Data, 'base64');
-      const mimetype = `image/${ext}`;
-      const timestamp = Date.now();
-      const fileName = `reference_${timestamp}_${Math.random().toString(36).substring(7)}.${ext}`;
-      
-      let imageUrl: string = '';
-      
-      if (process.env.NODE_ENV === 'local') {
-        const rootDir = path.resolve(__dirname, '..', '..', '..');
-        const dir = path.join(rootDir, 'uploads', 'quotation');
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
+      for (const base64Image of base64Images) {
+        if (!base64Image) continue;
+        
+        const matches = base64Image.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
+        if (!matches) {
+          throw new BadRequestException('Invalid base64 image format');
         }
         
-        const filePath = path.join(dir, fileName);
-        fs.writeFileSync(filePath, buffer);
+        const ext = matches[1];
+        const base64Data = matches[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const mimetype = `image/${ext}`;
+        const timestamp = Date.now();
+        const fileName = `request_quotation_${timestamp}_${Math.random()
+          .toString(36)
+          .substring(7)}.${ext}`;
 
-        imageUrl = `/uploads/quotation/${fileName}`;
-      } else {
-        const awsUploadReqDto = {
-          Bucket: this.awsConfig.bucketName,
-          Key:
-            this.awsConfig.bucketFolderName +
-            '/' +
-            'quotation' +
-            '/' +
-            fileName,
-          Body: buffer,
-          ContentType: mimetype,
-        };
-        const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
-        imageUrl = response?.Location || '';
+        console.log('📁 Processing reference image:', { ext, mimetype, fileName, size: buffer.length });
+
+        let imageUrl = '';
+        
+        if (process.env.NODE_ENV === 'local') {
+          console.log('🏠 Using local file system for development');
+          const rootDir = path.resolve(__dirname, '..', '..', '..');
+          const dir = path.join(rootDir, 'uploads', 'quotation');
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+          const filePath = path.join(dir, fileName);
+          fs.writeFileSync(filePath, buffer);
+          imageUrl = `/uploads/quotation/${fileName}`;
+          console.log('✅ Local file saved:', imageUrl);
+        } else {
+          console.log('☁️ Using AWS S3 for production');
+          try {
+            // Try AWS S3 first
+            const awsUploadReqDto = {
+              Bucket: awsConfig.bucketName,
+              Key: awsConfig.bucketFolderName + '/' + 'quotation' + '/' + fileName,
+              Body: buffer,
+              ContentType: mimetype,
+            } as any;
+            
+            const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
+            imageUrl = (response as any)?.Location || '';
+            console.log('✅ AWS S3 upload successful:', imageUrl);
+          } catch (s3Error) {
+            console.error('❌ AWS S3 upload failed, using Supabase fallback:', s3Error.message);
+            // Fallback to Supabase if AWS S3 fails
+            try {
+              const { publicUrl } = await this.supabaseService.upload({
+                filePath: 'quotation_' + fileName,
+                file: buffer,
+                contentType: mimetype,
+                bucket: 'quotation',
+              });
+              imageUrl = publicUrl || '';
+              console.log('✅ Supabase fallback upload successful:', imageUrl);
+            } catch (supabaseError) {
+              console.error('❌ Supabase fallback also failed:', supabaseError.message);
+              // Don't save placeholder URL - skip this image instead
+              console.log('⚠️ Image upload failed completely, skipping this image');
+              imageUrl = ''; // Empty string instead of placeholder
+            }
+          }
+        }
+        
+        // Only add non-empty URLs (skip failed uploads)
+        if (imageUrl && imageUrl.trim() !== '') {
+          uploadedUrls.push(imageUrl);
+        } else {
+          console.log('⚠️ Skipping image due to upload failure');
+        }
       }
       
-      uploadedUrls.push(imageUrl);
+      console.log('✅ All reference images processed:', uploadedUrls.length);
+      // Filter out any empty strings just to be safe
+      return uploadedUrls.filter(url => url && url.trim() !== '');
+      
+    } catch (error) {
+      console.error('❌ Error uploading reference images:', error);
+      throw error;
     }
-    
-    return uploadedUrls;
   }
 }

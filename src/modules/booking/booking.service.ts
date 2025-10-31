@@ -508,6 +508,9 @@ export class BookingService {
     console.log('findByBookingId - Booking user ID:', (booking as any).userId);
     console.log('findByBookingId - User ID type:', typeof userId);
     console.log('findByBookingId - Booking user ID type:', typeof (booking as any).userId);
+    console.log('findByBookingId - Raw booking referenceImages:', (booking as any).referenceImages);
+    console.log('findByBookingId - Raw booking referenceImages type:', typeof (booking as any).referenceImages);
+    console.log('findByBookingId - Raw booking referenceImages is array:', Array.isArray((booking as any).referenceImages));
     
     if (userId && (booking as any).userId) {
       // Convert both to strings for comparison
@@ -587,20 +590,36 @@ export class BookingService {
 
     // Process referenceImages - filter out placeholder URLs and ensure proper format
     let referenceImages = (booking as any).referenceImages || [];
+    console.log('findByBookingId - Original referenceImages from DB:', referenceImages);
+    console.log('findByBookingId - Original referenceImages type:', typeof referenceImages);
+    console.log('findByBookingId - Original referenceImages is array:', Array.isArray(referenceImages));
+    
     if (Array.isArray(referenceImages)) {
       // Filter out placeholder URLs if any exist
+      const beforeFilter = referenceImages.length;
       referenceImages = referenceImages.filter((url: string) => {
-        if (!url || typeof url !== 'string') return false;
+        if (!url || typeof url !== 'string') {
+          console.log('findByBookingId - Filtering out invalid URL:', url);
+          return false;
+        }
         // Keep only actual image URLs, not placeholder URLs
-        return !url.includes('via.placeholder.com') && !url.includes('placeholder');
+        const isPlaceholder = url.includes('via.placeholder.com') || url.includes('placeholder');
+        if (isPlaceholder) {
+          console.log('findByBookingId - Filtering out placeholder URL:', url);
+        }
+        return !isPlaceholder;
       });
       
+      console.log('findByBookingId - Filtered referenceImages:', referenceImages);
+      console.log('findByBookingId - Before filter:', beforeFilter, 'After filter:', referenceImages.length);
+      
       // If all images were placeholders and filtered out, set to empty array
-      if (referenceImages.length === 0 && (booking as any).referenceImages?.length > 0) {
+      if (referenceImages.length === 0 && beforeFilter > 0) {
         console.log('⚠️ All reference images were placeholders, returning empty array');
       }
     } else {
       // If referenceImages is not an array, convert to array or set to empty
+      console.log('⚠️ referenceImages is not an array, converting to empty array');
       referenceImages = [];
     }
 
@@ -608,7 +627,7 @@ export class BookingService {
       ...booking,
       status: (booking as any).bookingStatus || 'pending',
       categoryType: (booking as any).categoryType || null,
-      referenceImages: referenceImages, // Use filtered referenceImages
+      referenceImages: referenceImages, // Explicitly set filtered referenceImages
       venue,
       vendor,
       event,
@@ -616,6 +635,7 @@ export class BookingService {
       venueOrVenderInfo
     };
 
+    console.log('findByBookingId - Final bookingData referenceImages:', bookingData.referenceImages);
     console.log('findByBookingId - Reference images count:', referenceImages.length);
     console.log('findByBookingId - Reference images:', referenceImages);
 
@@ -633,7 +653,11 @@ export class BookingService {
     
     let uploadedImageUrls: string[] = [];
     if (dto.referenceImages?.length) {
+      console.log(`📸 Processing ${dto.referenceImages.length} reference images for booking...`);
       uploadedImageUrls = await this.uploadBase64Images(dto.referenceImages);
+      console.log(`✅ Successfully uploaded ${uploadedImageUrls.length} reference images:`, uploadedImageUrls);
+    } else {
+      console.log('📸 No reference images provided in booking request');
     }
 
     const entity = this.bookingRepo.create({
@@ -645,8 +669,13 @@ export class BookingService {
     });
     
     console.log('Booking Service - Created entity userId:', entity.userId, 'Type:', typeof entity.userId);
+    console.log('Booking Service - Created entity referenceImages:', (entity as any).referenceImages);
+    console.log('Booking Service - Created entity referenceImages count:', (entity as any).referenceImages?.length || 0);
+    
     const savedEntity = await this.bookingRepo.save(entity);
     console.log('Booking Service - Saved entity userId:', (savedEntity as any).userId, 'Type:', typeof (savedEntity as any).userId);
+    console.log('Booking Service - Saved entity referenceImages:', (savedEntity as any).referenceImages);
+    console.log('Booking Service - Saved entity referenceImages count:', (savedEntity as any).referenceImages?.length || 0);
     
     return savedEntity;
   }
@@ -656,7 +685,18 @@ export class BookingService {
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }
-    if ((booking as any).userId !== userId) {
+    
+    // Convert both userIds to strings for proper comparison
+    const tokenUserId = String(userId);
+    const bookingUserId = String((booking as any).userId || '');
+    
+    console.log('updateBooking - Token user ID (string):', tokenUserId);
+    console.log('updateBooking - Booking user ID (string):', bookingUserId);
+    console.log('updateBooking - User ID type from token:', typeof userId);
+    console.log('updateBooking - User ID type from booking:', typeof (booking as any).userId);
+    console.log('updateBooking - IDs match:', tokenUserId === bookingUserId);
+    
+    if (tokenUserId !== bookingUserId) {
       throw new BadRequestException('You can only update your own bookings');
     }
     let uploadedImageUrls: string[] = [];

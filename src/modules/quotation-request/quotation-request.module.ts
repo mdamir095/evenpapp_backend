@@ -6,11 +6,13 @@ import { PhotographyType } from './entity/photography-type.entity';
 import { QuotationRequestService } from './quotation-request.service';
 import { QuotationRequestController } from './quotation-request.controller';
 import { AwsModule } from '@core/aws/aws.module';
+import { SupabaseModule } from '@shared/modules/supabase/supabase.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([QuotationRequest, EventType, PhotographyType], 'mongo'),
     AwsModule,
+    SupabaseModule,
   ],
   controllers: [QuotationRequestController],
   providers: [QuotationRequestService],
