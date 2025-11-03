@@ -29,6 +29,10 @@
     "fromEmail": "majid@whiz-solutions.com",
     "fromName": "Pacifica Shipping"
   },
+  "resend": {
+    "apiKey": "re_bWEYcHXr_5nR86Vwbn3Ddej9yRxC4btTp",
+    "fromEmail": "akhil@whiz-solutions.com"
+  },
   "email" :{
     "SMTP_HOST": "smtp.gmail.com",
     "SMTP_PORT": 587,

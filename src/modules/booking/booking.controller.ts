@@ -68,6 +68,39 @@ export class BookingController {
     }
   }
 
+  @Get('all')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Get all bookings',
+    description: 'Retrieves all bookings with pagination, search, and filters',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({ name: 'search', required: false, type: String, example: 'Wedding' })
+  @ApiQuery({ name: 'status', required: false, type: String, example: 'pending' })
+  @ApiQuery({ name: 'bookingType', required: false, enum: ['venue', 'vendor'] })
+  @ApiQuery({ name: 'dateFrom', required: false, type: String, example: '2025-01-01' })
+  @ApiQuery({ name: 'dateTo', required: false, type: String, example: '2025-12-31' })
+  @ApiResponse({ status: HttpStatus.OK, type: BookingUserListResponseDto })
+  async getAllBookings(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('bookingType') bookingType?: 'venue' | 'vendor',
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ): Promise<BookingUserListResponseDto> {
+    const data = await this.bookingService.findAllForAdmin(page, limit, search, status, bookingType, dateFrom, dateTo)
+    
+    return {
+      bookings: data.bookings,
+      total: data.total,
+      page: data.page,
+      limit: data.limit,
+    }
+  }
+
   @Get('admin')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({

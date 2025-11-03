@@ -44,6 +44,7 @@ import { MealTypeModule } from './modules/meal-type/meal-type.module';
 import { CuisineModule } from './modules/cuisine/cuisine.module';
 import { ServingStyleModule } from './modules/serving-style/serving-style.module';
 import { AdditionalServiceModule } from './modules/additional-service/additional-service.module';
+import { SimilarModule } from './modules/similar/similar.module';
 
 @Module({
   imports: [
@@ -243,6 +244,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
     FieldModule,
     FormModule,
     ServiceCategoryModule,
+    SimilarModule,
     VenueModule,
     VendorModule,
     EnterpriseModule,
