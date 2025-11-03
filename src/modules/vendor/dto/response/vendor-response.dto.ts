@@ -63,6 +63,7 @@ export class VendorResponseDto {
 
   @ApiProperty({ description: 'Price of the vendor' })
   @Expose()
+  @Transform(({ obj }) => obj.price || 0)
   price: number;
 
   @ApiProperty({ 
