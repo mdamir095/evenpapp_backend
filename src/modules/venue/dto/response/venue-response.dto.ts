@@ -57,6 +57,11 @@ export class VenueResponseDto {
   @Expose()
   location: LocationDto;
 
+  @ApiProperty({ description: 'Price of the venue' })
+  @Expose()
+  @Transform(({ obj }) => obj.price || 0)
+  price: number;
+
   @ApiProperty({ 
     description: 'Dynamic pricing array based on category',
     example: [
@@ -120,4 +125,19 @@ export class VenueResponseDto {
   @ApiProperty({ description: 'Whether the venue is deleted' })
   @Expose()
   isDeleted: boolean;
+
+  @ApiProperty({ description: "URL of the venue's image" })
+  @Expose()
+  @Transform(({ obj }) => obj.imageUrl || obj.formData?.images?.[0] || 'https://t3.ftcdn.net/jpg/05/06/74/32/360_F_506743235_coW6QAlhxlBWjnRk0VNsHqaXGGH9F4JS.jpg')
+  image: string;
+
+  @ApiProperty({ description: 'Average rating of the venue' })
+  @Expose()
+  @Transform(({ obj }) => obj.averageRating || 0)
+  rating: number;
+
+  @ApiProperty({ description: 'Total number of ratings/reviews for the venue' })
+  @Expose()
+  @Transform(({ obj }) => obj.totalRatings || 0)
+  reviews: number;
 }
