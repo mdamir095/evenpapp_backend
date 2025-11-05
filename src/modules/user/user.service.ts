@@ -308,12 +308,45 @@ export class UserService {
   }
 
   async createFromGoogle(payload: any) {
+    // Find or create the default role
+    let defaultRole = await this.roleService.findByName(RoleType.USER);
+    if (!defaultRole) {
+      let userFeature = await this.featureService.findByName(FeatureType.USER);
+      if (!userFeature) {
+        userFeature = await this.featureService.create({
+          name: FeatureType.USER,
+          isActive: true
+        });
+      }
+      // Create the 'User' role with the 'user' feature
+      defaultRole = await this.roleService.save({
+        name: RoleType.USER,
+        featureIds: [new ObjectId(userFeature.id)],
+      });
+    }
+
+    // Generate a random password for Google users (they won't use it)
+    const randomPassword = await bcrypt.hash(Math.random().toString(36) + Date.now().toString(36), 10);
+
     const user = this.userRepository.create({
-      email: payload.email,
-      firstName: payload.given_name,
-      lastName: payload.family_name,
-      isEmailVerified: payload.email_verified,
-      // ...any other fields you want to set
+      email: payload.email?.toLowerCase() || '',
+      firstName: payload.given_name || payload.name || 'User',
+      lastName: payload.family_name || '',
+      isEmailVerified: payload.email_verified || false,
+      password: randomPassword, // Required field, but Google users won't use it
+      organizationName: payload.organizationName || '', // Required field
+      countryCode: payload.countryCode || '+1', // Required field, default to +1
+      phoneNumber: payload.phoneNumber || '', // Required field
+      roleIds: [defaultRole.id], // Required field - assign default role
+      address: payload.address || '', // Required field
+      city: payload.city || '', // Required field
+      state: payload.state || '', // Required field
+      pincode: payload.pincode || '', // Required field
+      isEnterpriseAdmin: false, // Required field
+      isMobileAppUser: true,
+      userType: 'USER',
+      profileImage: payload.picture || null, // Use Google profile picture if available
+      isActive: true,
     });
     return this.userRepository.save(user);
   }

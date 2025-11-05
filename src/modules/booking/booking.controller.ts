@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common'
 import {
   ApiBearerAuth,
+  ApiBody,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -27,9 +28,13 @@ import { BookingUserListResponseDto } from './dto/response/booking-user-list-res
 import { CreateRequestBookingDto } from './dto/request/create-request-booking.dto'
 import { UpdateBookingDto } from './dto/request/update-booking.dto'
 import { CancelBookingDto } from './dto/request/cancel-booking.dto'
+import { AcceptBookingDto } from './dto/request/accept-booking.dto'
+import { RejectBookingDto } from './dto/request/reject-booking.dto'
 import { RequestBookingResponseDto } from './dto/response/request-booking-response.dto'
 import { BookingDetailResponseDto } from './dto/response/booking-detail-response.dto'
 import { CancelBookingResponseDto } from './dto/response/cancel-booking-response.dto'
+import { AcceptBookingResponseDto } from './dto/response/accept-booking-response.dto'
+import { RejectBookingResponseDto } from './dto/response/reject-booking-response.dto'
 
 @ApiTags('Booking')
 @Controller('booking')
@@ -211,20 +216,86 @@ export class BookingController {
     return plainToInstance(BookingDetailResponseDto, data, { excludeExtraneousValues: true })
   }
 
-  @Put(':bookingId')
+  @Put(':bookingId/accept')
   @UseGuards(AuthGuard('jwt'))
-  @ApiOperation({ summary: 'Update booking details by bookingId' })
+  @ApiOperation({ 
+    summary: 'Accept a booking',
+    description: 'Allows vendors/admins to accept a pending booking'
+  })
   @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
-  @ApiResponse({ status: HttpStatus.OK, type: BookingDetailResponseDto })
-  async updateBooking(
+  @ApiBody({ type: AcceptBookingDto })
+  @ApiResponse({ 
+    status: HttpStatus.OK, 
+    description: 'Booking accepted successfully',
+    type: AcceptBookingResponseDto 
+  })
+  @ApiResponse({ 
+    status: HttpStatus.BAD_REQUEST, 
+    description: 'Cannot accept booking (already confirmed, cancelled, completed, or rejected)' 
+  })
+  @ApiResponse({ 
+    status: HttpStatus.NOT_FOUND, 
+    description: 'Booking not found' 
+  })
+  async acceptBooking(
     @Param('bookingId') bookingId: string,
-    @Body() dto: UpdateBookingDto,
+    @Body() dto: AcceptBookingDto,
     @Req() req: any,
-  ): Promise<BookingDetailResponseDto> {
-    const userId: string = req?.user?.id || req?.user?._id || req?.user?.sub
-    const data = await this.bookingService.updateBooking(bookingId, dto, userId)
+  ): Promise<AcceptBookingResponseDto> {
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub)
+    console.log('Accept Booking Controller - User from JWT:', req?.user);
+    console.log('Accept Booking Controller - Extracted userId:', userId, 'Type:', typeof userId);
+    const data = await this.bookingService.acceptBooking(bookingId, dto, userId)
     
-    return plainToInstance(BookingDetailResponseDto, data, { excludeExtraneousValues: true })
+    return plainToInstance(AcceptBookingResponseDto, {
+      id: data.id || data._id,
+      bookingId: data.bookingId,
+      bookingStatus: data.bookingStatus,
+      notes: data.notes,
+      updatedAt: data.updatedAt,
+    }, { excludeExtraneousValues: true })
+  }
+
+  @Put(':bookingId/reject')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ 
+    summary: 'Reject a booking',
+    description: 'Allows vendors/admins to reject a pending booking with a reason'
+  })
+  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
+  @ApiBody({ type: RejectBookingDto })
+  @ApiResponse({ 
+    status: HttpStatus.OK, 
+    description: 'Booking rejected successfully',
+    type: RejectBookingResponseDto 
+  })
+  @ApiResponse({ 
+    status: HttpStatus.BAD_REQUEST, 
+    description: 'Cannot reject booking (already rejected, cancelled, completed, or confirmed)' 
+  })
+  @ApiResponse({ 
+    status: HttpStatus.NOT_FOUND, 
+    description: 'Booking not found' 
+  })
+  async rejectBooking(
+    @Param('bookingId') bookingId: string,
+    @Body() dto: RejectBookingDto,
+    @Req() req: any,
+  ): Promise<RejectBookingResponseDto> {
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub)
+    console.log('Reject Booking Controller - User from JWT:', req?.user);
+    console.log('Reject Booking Controller - Extracted userId:', userId, 'Type:', typeof userId);
+    const data = await this.bookingService.rejectBooking(bookingId, dto, userId)
+    
+    return plainToInstance(RejectBookingResponseDto, {
+      id: data.id || data._id,
+      bookingId: data.bookingId,
+      bookingStatus: data.bookingStatus,
+      rejectionReason: data.rejectionReason,
+      rejectionDate: data.rejectionDate,
+      notes: data.notes,
+      updatedAt: data.updatedAt,
+    }, { excludeExtraneousValues: true })
   }
 
   @Put(':bookingId/cancel')
@@ -234,6 +305,7 @@ export class BookingController {
     description: 'Allows users to cancel their own bookings with a reason'
   })
   @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
+  @ApiBody({ type: CancelBookingDto })
   @ApiResponse({ 
     status: HttpStatus.OK, 
     description: 'Booking cancelled successfully',
@@ -266,6 +338,43 @@ export class BookingController {
       notes: data.notes,
       updatedAt: data.updatedAt,
     }, { excludeExtraneousValues: true })
+  }
+
+  @Put(':bookingId')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Update booking details by bookingId' })
+  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
+  @ApiResponse({ status: HttpStatus.OK, type: BookingDetailResponseDto })
+  async updateBooking(
+    @Param('bookingId') bookingId: string,
+    @Body() dto: UpdateBookingDto,
+    @Req() req: any,
+  ): Promise<BookingDetailResponseDto> {
+    const userId: string = req?.user?.id || req?.user?._id || req?.user?.sub
+    const data = await this.bookingService.updateBooking(bookingId, dto, userId)
+    
+    return plainToInstance(BookingDetailResponseDto, data, { excludeExtraneousValues: true })
+  }
+
+  @Post('migrate-status')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Migrate booking status',
+    description: 'Updates all existing bookings without bookingStatus to PENDING. Admin only operation.'
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Migration completed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        updated: { type: 'number', description: 'Number of bookings updated' },
+        message: { type: 'string', description: 'Success message' }
+      }
+    }
+  })
+  async migrateBookingStatus(): Promise<{ updated: number; message: string }> {
+    return this.bookingService.migrateBookingStatus();
   }
 }
 

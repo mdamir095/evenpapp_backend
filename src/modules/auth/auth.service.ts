@@ -59,24 +59,42 @@ export class AuthService {
     }
 
     async googleLogin(token: string) {
-        // Verify the token with Google
-        const ticket = await this.client.verifyIdToken({
-          idToken: token,
-          audience: this.configService.get<string>('auth.googleClientId'),
-        });
-        const payload = ticket.getPayload();
-        if (!payload || !payload.email) {
-          throw new BadRequestException('Invalid Google token');
+        try {
+          // Verify the token with Google
+          const ticket = await this.client.verifyIdToken({
+            idToken: token,
+            audience: this.configService.get<string>('auth.googleClientId'),
+          });
+          const payload = ticket.getPayload();
+          if (!payload || !payload.email) {
+            throw new BadRequestException('Invalid Google token: Missing email in token payload');
+          }
+        
+          // Find or create user in your DB
+          let user = await this.userService.findByEmail(payload.email);
+          if (!user) {
+            user = await this.userService.createFromGoogle(payload);
+          }
+        
+          // Return JWT and user info
+          return this.signinJwt(user);
+        } catch (error) {
+          // Log the error for debugging
+          console.error('Google login error:', error);
+          
+          // Handle specific Google OAuth errors
+          if (error.message?.includes('Invalid token signature') || error.message?.includes('Token used too early')) {
+            throw new BadRequestException('Invalid Google token: ' + error.message);
+          }
+          
+          // Handle other known errors
+          if (error instanceof BadRequestException) {
+            throw error;
+          }
+          
+          // Generic error for unexpected issues
+          throw new BadRequestException('Google login failed: ' + (error.message || 'Unknown error'));
         }
-      
-        // Find or create user in your DB
-        let user = await this.userService.findByEmail(payload.email);
-        if (!user) {
-          user = await this.userService.createFromGoogle(payload);
-        }
-      
-        // Return JWT and user info
-        return this.signinJwt(user);
       }
 
     // async phoneLogin(phoneNumber: string, otp: string) {
