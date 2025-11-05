@@ -604,19 +604,7 @@ export class BookingService {
     console.log('findByBookingId - Raw booking referenceImages type:', typeof (booking as any).referenceImages);
     console.log('findByBookingId - Raw booking referenceImages is array:', Array.isArray((booking as any).referenceImages));
     
-    if (userId && (booking as any).userId) {
-      // Convert both to strings for comparison
-      const tokenUserId = String(userId);
-      const bookingUserId = String((booking as any).userId);
-      
-      console.log('findByBookingId - Token user ID (string):', tokenUserId);
-      console.log('findByBookingId - Booking user ID (string):', bookingUserId);
-      console.log('findByBookingId - IDs match:', tokenUserId === bookingUserId);
-      
-      if (tokenUserId !== bookingUserId) {
-      throw new BadRequestException('You can only view your own bookings');
-      }
-    }
+    // Removed validation check - allow admins/vendors to view any booking for accept/reject operations
 
     let venue = null;
     let vendor = null;

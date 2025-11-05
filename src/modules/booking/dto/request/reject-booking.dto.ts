@@ -5,6 +5,15 @@ export class RejectBookingDto {
   @IsString()
   @IsNotEmpty()
   @ApiProperty({
+    description: 'Booking ID',
+    example: 'BK-A9098A0F',
+    required: true,
+  })
+  bookingId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty({
     description: 'Reason for rejection',
     example: 'Venue not available on requested date',
     required: true,

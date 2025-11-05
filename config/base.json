@@ -19,7 +19,7 @@
   "auth": {
     "cookieKeyName": "accessToken",
     "customerCookiesName": "customerDetail",
-    "googleClientId": "672548980935-a0btm94uosor2tt6ltku06m3fk0o5ipq.apps.googleusercontent.com"
+    "googleClientId": "286606728800-bva0e8ed18i0t40ug5kn36a5dsrh5mjc.apps.googleusercontent.com"
   },
   "google": {
     "mapsApiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"

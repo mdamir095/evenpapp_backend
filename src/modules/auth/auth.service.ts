@@ -60,20 +60,69 @@ export class AuthService {
 
     async googleLogin(token: string) {
         try {
+          // Validate token exists and is not empty
+          if (!token || typeof token !== 'string' || token.trim().length === 0) {
+            throw new BadRequestException('Google ID token is required');
+          }
+
+          // Trim whitespace from token
+          const cleanToken = token.trim();
+          
+          console.log('Google login - Token received:', cleanToken.substring(0, 50) + '...');
+          console.log('Google login - Token length:', cleanToken.length);
+          
+          // Try to decode token to see the audience
+          let tokenAudience: string | null = null;
+          try {
+            const parts = cleanToken.split('.');
+            if (parts.length === 3) {
+              const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+              tokenAudience = payload.aud;
+              console.log('Google login - Token audience (aud):', tokenAudience);
+            }
+          } catch (decodeError) {
+            console.log('Google login - Could not decode token to check audience');
+          }
+          
+          const googleClientId = this.configService.get<string>('auth.googleClientId');
+          if (!googleClientId) {
+            throw new BadRequestException('Google Client ID is not configured');
+          }
+          
+          console.log('Google login - Using Client ID:', googleClientId);
+          
+          // If token audience doesn't match, provide helpful error
+          if (tokenAudience && tokenAudience !== googleClientId) {
+            console.error('Google login - Client ID mismatch!');
+            console.error('Google login - Token was issued for:', tokenAudience);
+            console.error('Google login - Backend is configured with:', googleClientId);
+            throw new BadRequestException(
+              `Google Client ID mismatch. Token was issued for a different client ID. ` +
+              `Please update the backend configuration to use Client ID: ${tokenAudience} ` +
+              `or ensure the frontend uses the correct Client ID: ${googleClientId}`
+            );
+          }
+          
           // Verify the token with Google
           const ticket = await this.client.verifyIdToken({
-            idToken: token,
-            audience: this.configService.get<string>('auth.googleClientId'),
+            idToken: cleanToken,
+            audience: googleClientId,
           });
+          
           const payload = ticket.getPayload();
           if (!payload || !payload.email) {
             throw new BadRequestException('Invalid Google token: Missing email in token payload');
           }
         
+          console.log('Google login - Token verified successfully for email:', payload.email);
+          
           // Find or create user in your DB
           let user = await this.userService.findByEmail(payload.email);
           if (!user) {
+            console.log('Google login - Creating new user for email:', payload.email);
             user = await this.userService.createFromGoogle(payload);
+          } else {
+            console.log('Google login - Existing user found for email:', payload.email);
           }
         
           // Return JWT and user info
@@ -81,10 +130,25 @@ export class AuthService {
         } catch (error) {
           // Log the error for debugging
           console.error('Google login error:', error);
+          console.error('Google login error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+          });
           
           // Handle specific Google OAuth errors
-          if (error.message?.includes('Invalid token signature') || error.message?.includes('Token used too early')) {
+          if (error.message?.includes('Invalid token signature') || 
+              error.message?.includes('Token used too early') ||
+              error.message?.includes('requires an ID Token')) {
             throw new BadRequestException('Invalid Google token: ' + error.message);
+          }
+          
+          // Handle audience mismatch error
+          if (error.message?.includes('Wrong recipient') || error.message?.includes('payload audience')) {
+            throw new BadRequestException(
+              'Google Client ID mismatch. The token was issued for a different Google Client ID than the one configured in the backend. ' +
+              'Please ensure the frontend and backend are using the same Google OAuth Client ID.'
+            );
           }
           
           // Handle other known errors

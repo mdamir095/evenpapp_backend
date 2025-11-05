@@ -216,13 +216,12 @@ export class BookingController {
     return plainToInstance(BookingDetailResponseDto, data, { excludeExtraneousValues: true })
   }
 
-  @Put(':bookingId/accept')
+  @Put('accept')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ 
     summary: 'Accept a booking',
     description: 'Allows vendors/admins to accept a pending booking'
   })
-  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
   @ApiBody({ type: AcceptBookingDto })
   @ApiResponse({ 
     status: HttpStatus.OK, 
@@ -238,14 +237,13 @@ export class BookingController {
     description: 'Booking not found' 
   })
   async acceptBooking(
-    @Param('bookingId') bookingId: string,
     @Body() dto: AcceptBookingDto,
     @Req() req: any,
   ): Promise<AcceptBookingResponseDto> {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub)
     console.log('Accept Booking Controller - User from JWT:', req?.user);
     console.log('Accept Booking Controller - Extracted userId:', userId, 'Type:', typeof userId);
-    const data = await this.bookingService.acceptBooking(bookingId, dto, userId)
+    const data = await this.bookingService.acceptBooking(dto.bookingId, dto, userId)
     
     return plainToInstance(AcceptBookingResponseDto, {
       id: data.id || data._id,
@@ -256,13 +254,12 @@ export class BookingController {
     }, { excludeExtraneousValues: true })
   }
 
-  @Put(':bookingId/reject')
+  @Put('reject')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ 
     summary: 'Reject a booking',
     description: 'Allows vendors/admins to reject a pending booking with a reason'
   })
-  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
   @ApiBody({ type: RejectBookingDto })
   @ApiResponse({ 
     status: HttpStatus.OK, 
@@ -278,14 +275,13 @@ export class BookingController {
     description: 'Booking not found' 
   })
   async rejectBooking(
-    @Param('bookingId') bookingId: string,
     @Body() dto: RejectBookingDto,
     @Req() req: any,
   ): Promise<RejectBookingResponseDto> {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub)
     console.log('Reject Booking Controller - User from JWT:', req?.user);
     console.log('Reject Booking Controller - Extracted userId:', userId, 'Type:', typeof userId);
-    const data = await this.bookingService.rejectBooking(bookingId, dto, userId)
+    const data = await this.bookingService.rejectBooking(dto.bookingId, dto, userId)
     
     return plainToInstance(RejectBookingResponseDto, {
       id: data.id || data._id,
