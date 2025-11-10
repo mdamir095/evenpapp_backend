@@ -69,30 +69,30 @@ export class BookingService {
         }
         
         if (statusArray.length > 0) {
-          // Normalize all statuses to uppercase and map to enum values
-          const normalizedStatuses = statusArray.map(s => s.toUpperCase().trim());
+          // Normalize all statuses to lowercase and map to enum values
+          const normalizedStatuses = statusArray.map(s => s.toLowerCase().trim());
           console.log(`Booking findAllForAdmin - Normalized statuses:`, normalizedStatuses);
           
           // Build status filter - support multiple statuses
           const statusConditions: any[] = [];
           
           normalizedStatuses.forEach(normalizedStatus => {
-            if (normalizedStatus === 'PENDING') {
-              // For PENDING, we need to match: 'PENDING', null, or missing field
+            if (normalizedStatus === 'pending') {
+              // For pending, we need to match: 'pending', null, or missing field
               statusConditions.push(
                 { bookingStatus: BookingStatus.PENDING },
-                { bookingStatus: 'PENDING' },
+                { bookingStatus: 'pending' },
                 { bookingStatus: null },
                 { bookingStatus: { $exists: false } }
               );
             } else {
-              // Map to enum value
+              // Map to enum value - try lowercase first, then uppercase for backward compatibility
               const enumValue = normalizedStatus as BookingStatus;
-              // Try multiple formats: enum value, uppercase string, and lowercase string
+              // Try multiple formats: enum value, lowercase string, and uppercase string (for backward compatibility)
               statusConditions.push(
                 { bookingStatus: enumValue },
                 { bookingStatus: normalizedStatus },
-                { bookingStatus: normalizedStatus.toLowerCase() }
+                { bookingStatus: normalizedStatus.toUpperCase() }
               );
             }
           });
@@ -238,7 +238,7 @@ export class BookingService {
           const completedTest = await this.bookingRepo.find({
             where: { 
               isDeleted: false,
-              bookingStatus: 'COMPLETED'
+              bookingStatus: 'completed'
             } as any,
             take: 5
           });
@@ -843,7 +843,7 @@ export class BookingService {
       referenceImages: uploadedImageUrls,
       eventDate: dto.eventDate,
       endDate: dto.endDate,
-      bookingStatus: BookingStatus.PENDING // Explicitly set to PENDING by default
+      bookingStatus: BookingStatus.PENDING // Explicitly set to pending by default
     });
     
     console.log('Booking Service - Created entity userId:', entity.userId, 'Type:', typeof entity.userId);
@@ -1145,20 +1145,20 @@ export class BookingService {
     }
     
     // Check if booking can be cancelled
-    const currentStatus = (booking as any).bookingStatus;
-    if (currentStatus === 'CANCELLED') {
+    const currentStatus = ((booking as any).bookingStatus || '').toLowerCase();
+    if (currentStatus === 'cancelled') {
       throw new BadRequestException('Booking is already cancelled');
     }
-    if (currentStatus === 'COMPLETED') {
+    if (currentStatus === 'completed') {
       throw new BadRequestException('Cannot cancel a completed booking');
     }
-    if (currentStatus === 'REJECTED') {
+    if (currentStatus === 'rejected') {
       throw new BadRequestException('Cannot cancel a rejected booking');
     }
 
     // Update booking status to cancelled
     const updateData = {
-      bookingStatus: 'CANCELLED',
+      bookingStatus: 'cancelled',
       cancellationReason: dto.cancellationReason,
       cancellationDate: new Date(),
       notes: dto.notes || null,
@@ -1192,23 +1192,23 @@ export class BookingService {
     }
 
     // Check if booking can be accepted
-    const currentStatus = (booking as any).bookingStatus;
-    if (currentStatus === 'CONFIRMED') {
+    const currentStatus = ((booking as any).bookingStatus || '').toLowerCase();
+    if (currentStatus === 'confirmed') {
       throw new BadRequestException('Booking is already confirmed');
     }
-    if (currentStatus === 'CANCELLED') {
+    if (currentStatus === 'cancelled') {
       throw new BadRequestException('Cannot accept a cancelled booking');
     }
-    if (currentStatus === 'COMPLETED') {
+    if (currentStatus === 'completed') {
       throw new BadRequestException('Cannot accept a completed booking');
     }
-    if (currentStatus === 'REJECTED') {
+    if (currentStatus === 'rejected') {
       throw new BadRequestException('Cannot accept a rejected booking');
     }
 
     // Update booking status to confirmed
     const updateData: any = {
-      bookingStatus: 'CONFIRMED',
+      bookingStatus: 'confirmed',
     };
 
     // Add notes if provided
@@ -1254,17 +1254,17 @@ export class BookingService {
       }
 
       // Check if booking can be rejected
-      const currentStatus = (booking as any).bookingStatus;
-      if (currentStatus === 'REJECTED') {
+      const currentStatus = ((booking as any).bookingStatus || '').toLowerCase();
+      if (currentStatus === 'rejected') {
         throw new BadRequestException('Booking is already rejected');
       }
-      if (currentStatus === 'CANCELLED') {
+      if (currentStatus === 'cancelled') {
         throw new BadRequestException('Cannot reject a cancelled booking');
       }
-      if (currentStatus === 'COMPLETED') {
+      if (currentStatus === 'completed') {
         throw new BadRequestException('Cannot reject a completed booking');
       }
-      if (currentStatus === 'CONFIRMED') {
+      if (currentStatus === 'confirmed') {
         throw new BadRequestException('Cannot reject a confirmed booking. Please cancel it instead.');
       }
 
@@ -1277,7 +1277,7 @@ export class BookingService {
       }
       
       const updateData: any = {
-        bookingStatus: 'REJECTED',
+        bookingStatus: 'rejected',
         rejectionReason: rejectionReason,
         rejectionDate: new Date(),
       };
@@ -1428,7 +1428,7 @@ export class BookingService {
         try {
           await this.bookingRepo.update(
             { _id: (booking as any)._id || booking.id } as any,
-            { bookingStatus: 'PENDING' } as any
+            { bookingStatus: 'pending' } as any
           );
           updatedCount++;
         } catch (error) {
@@ -1450,7 +1450,7 @@ export class BookingService {
         try {
           await this.bookingRepo.update(
             { _id: (booking as any)._id || booking.id } as any,
-            { bookingStatus: 'PENDING' } as any
+            { bookingStatus: 'pending' } as any
           );
           updatedCount++;
         } catch (error) {
@@ -1458,11 +1458,40 @@ export class BookingService {
         }
       }
 
-      console.log(`Migration completed. Updated ${updatedCount} bookings.`);
+      // Also convert all uppercase statuses to lowercase
+      const uppercaseStatuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'REJECTED'];
+      let convertedCount = 0;
+      
+      for (const upperStatus of uppercaseStatuses) {
+        const lowerStatus = upperStatus.toLowerCase();
+        const bookingsWithUpperStatus = await this.bookingRepo.find({
+          where: {
+            isDeleted: false,
+            bookingStatus: upperStatus
+          } as any
+        });
+
+        console.log(`Found ${bookingsWithUpperStatus.length} bookings with status '${upperStatus}'`);
+
+        for (const booking of bookingsWithUpperStatus) {
+          try {
+            await this.bookingRepo.update(
+              { _id: (booking as any)._id || booking.id } as any,
+              { bookingStatus: lowerStatus } as any
+            );
+            convertedCount++;
+          } catch (error) {
+            console.error(`Error converting booking ${(booking as any).bookingId || (booking as any)._id}:`, error);
+          }
+        }
+      }
+
+      console.log(`Converted ${convertedCount} bookings from uppercase to lowercase status.`);
+      console.log(`Migration completed. Updated ${updatedCount} bookings, converted ${convertedCount} statuses.`);
       
       return {
-        updated: updatedCount,
-        message: `Successfully updated ${updatedCount} bookings to PENDING status`
+        updated: updatedCount + convertedCount,
+        message: `Successfully updated ${updatedCount} bookings to pending status and converted ${convertedCount} uppercase statuses to lowercase`
       };
     } catch (error) {
       console.error('Error in migrateBookingStatus:', error);
