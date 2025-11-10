@@ -1,5 +1,17 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, ValidateIf, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface, Validate } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+@ValidatorConstraint({ name: 'hasRejectionReason', async: false })
+export class HasRejectionReasonConstraint implements ValidatorConstraintInterface {
+  validate(value: any, args: ValidationArguments) {
+    const object = args.object as RejectBookingDto;
+    return !!(object.rejectionReason || object.reason);
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    return 'Either rejectionReason or reason must be provided';
+  }
+}
 
 export class RejectBookingDto {
   @IsString()
@@ -11,14 +23,28 @@ export class RejectBookingDto {
   })
   bookingId: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'rejectionReason must not be empty if provided' })
   @ApiProperty({
     description: 'Reason for rejection',
     example: 'Venue not available on requested date',
-    required: true,
+    required: false,
   })
-  rejectionReason: string;
+  rejectionReason?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty({ message: 'reason must not be empty if provided' })
+  @ApiProperty({
+    description: 'Reason for rejection (alternative to rejectionReason)',
+    example: 'Venue not available on requested date',
+    required: false,
+  })
+  reason?: string;
+
+  @Validate(HasRejectionReasonConstraint)
+  _validateRejectionReason: any;
 
   @IsOptional()
   @IsString()

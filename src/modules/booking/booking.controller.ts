@@ -11,6 +11,8 @@ import {
   ValidationPipe,
   Req,
   Param,
+  ParseArrayPipe,
+  DefaultValuePipe,
 } from '@nestjs/common'
 import {
   ApiBearerAuth,
@@ -82,21 +84,41 @@ export class BookingController {
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
   @ApiQuery({ name: 'search', required: false, type: String, example: 'Wedding' })
-  @ApiQuery({ name: 'status', required: false, type: String, example: 'pending' })
+  @ApiQuery({ name: 'status', required: false, type: [String], isArray: true, example: ['pending', 'confirmed'] })
   @ApiQuery({ name: 'bookingType', required: false, enum: ['venue', 'vendor'] })
   @ApiQuery({ name: 'dateFrom', required: false, type: String, example: '2025-01-01' })
   @ApiQuery({ name: 'dateTo', required: false, type: String, example: '2025-12-31' })
   @ApiResponse({ status: HttpStatus.OK, type: BookingUserListResponseDto })
   async getAllBookings(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
+    @Query('page', new DefaultValuePipe(1)) page: number,
+    @Query('limit', new DefaultValuePipe(10)) limit: number,
     @Query('search') search?: string,
-    @Query('status') status?: string,
+    @Query('status') status?: string | string[],
     @Query('bookingType') bookingType?: 'venue' | 'vendor',
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ): Promise<BookingUserListResponseDto> {
-    const data = await this.bookingService.findAllForAdmin(page, limit, search, status, bookingType, dateFrom, dateTo)
+    // Handle status parameter - support both string and array formats
+    let statusFilter: string | string[] | undefined;
+    if (status) {
+      if (Array.isArray(status)) {
+        // Already an array, use as is
+        statusFilter = status.length === 1 ? status[0] : status;
+      } else if (typeof status === 'string') {
+        // If it's a string, check if it contains commas (multiple values)
+        if (status.includes(',')) {
+          statusFilter = status.split(',').map(s => s.trim()).filter(s => s);
+        } else {
+          // Single status value
+          statusFilter = status.trim();
+        }
+      }
+    }
+    
+    console.log('Booking Controller - getAllBookings - status parameter:', status);
+    console.log('Booking Controller - getAllBookings - statusFilter:', statusFilter);
+    
+    const data = await this.bookingService.findAllForAdmin(page, limit, search, statusFilter, bookingType, dateFrom, dateTo)
     
     return {
       bookings: data.bookings,
@@ -115,21 +137,41 @@ export class BookingController {
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
   @ApiQuery({ name: 'search', required: false, type: String, example: 'Wedding' })
-  @ApiQuery({ name: 'status', required: false, type: String, example: 'pending' })
+  @ApiQuery({ name: 'status', required: false, type: [String], isArray: true, example: ['pending', 'confirmed'] })
   @ApiQuery({ name: 'bookingType', required: false, enum: ['venue', 'vendor'] })
   @ApiQuery({ name: 'dateFrom', required: false, type: String, example: '2025-01-01' })
   @ApiQuery({ name: 'dateTo', required: false, type: String, example: '2025-12-31' })
   @ApiResponse({ status: HttpStatus.OK, type: BookingUserListResponseDto })
   async findAllForAdmin(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
+    @Query('page', new DefaultValuePipe(1)) page: number,
+    @Query('limit', new DefaultValuePipe(10)) limit: number,
     @Query('search') search?: string,
-    @Query('status') status?: string,
+    @Query('status') status?: string | string[],
     @Query('bookingType') bookingType?: 'venue' | 'vendor',
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
   ): Promise<BookingUserListResponseDto> {
-    const data = await this.bookingService.findAllForAdmin(page, limit, search, status, bookingType, dateFrom, dateTo)
+    // Handle status parameter - support both string and array formats (same as /all endpoint)
+    let statusFilter: string | string[] | undefined;
+    if (status) {
+      if (Array.isArray(status)) {
+        // Already an array, use as is
+        statusFilter = status.length === 1 ? status[0] : status;
+      } else if (typeof status === 'string') {
+        // If it's a string, check if it contains commas (multiple values)
+        if (status.includes(',')) {
+          statusFilter = status.split(',').map(s => s.trim()).filter(s => s);
+        } else {
+          // Single status value
+          statusFilter = status.trim();
+        }
+      }
+    }
+    
+    console.log('Booking Controller - findAllForAdmin - status parameter:', status);
+    console.log('Booking Controller - findAllForAdmin - statusFilter:', statusFilter);
+    
+    const data = await this.bookingService.findAllForAdmin(page, limit, search, statusFilter, bookingType, dateFrom, dateTo)
     
     return {
       bookings: data.bookings,
@@ -216,7 +258,7 @@ export class BookingController {
     return plainToInstance(BookingDetailResponseDto, data, { excludeExtraneousValues: true })
   }
 
-  @Put('accept')
+  @Post('accept')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ 
     summary: 'Accept a booking',
@@ -254,7 +296,7 @@ export class BookingController {
     }, { excludeExtraneousValues: true })
   }
 
-  @Put('reject')
+  @Post('reject')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ 
     summary: 'Reject a booking',

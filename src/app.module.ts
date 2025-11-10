@@ -45,6 +45,7 @@ import { CuisineModule } from './modules/cuisine/cuisine.module';
 import { ServingStyleModule } from './modules/serving-style/serving-style.module';
 import { AdditionalServiceModule } from './modules/additional-service/additional-service.module';
 import { SimilarModule } from './modules/similar/similar.module';
+import { ChatModule } from './modules/chat/chat.module';
 
 @Module({
   imports: [
@@ -267,7 +268,8 @@ import { SimilarModule } from './modules/similar/similar.module';
     CuisineModule,
     ServingStyleModule,
     AdditionalServiceModule,
-    SupabaseModule
+    SupabaseModule,
+    ChatModule
   ],
   controllers: [AppController],
   providers: [
