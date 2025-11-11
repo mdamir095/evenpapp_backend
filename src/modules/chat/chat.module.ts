@@ -7,12 +7,16 @@ import { ChatController } from './chat.controller';
 import { ChatGateway } from './chat.gateway';
 import { Message } from './entity/message.entity';
 import { UserModule } from '@modules/user/user.module';
+import { BookingModule } from '@modules/booking/booking.module';
+import { Venue } from '@modules/venue/entity/venue.entity';
+import { Vendor } from '@modules/vendor/entity/vendor.entity';
 import type { JwtModuleOptions } from '@nestjs/jwt';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Message], 'mongo'),
+    TypeOrmModule.forFeature([Message, Venue, Vendor], 'mongo'),
     UserModule,
+    BookingModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService): JwtModuleOptions => ({

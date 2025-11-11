@@ -59,10 +59,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       // Notify user is online
       client.broadcast.emit('userOnline', { userId });
-
-      console.log(`User ${userId} connected with socket ${client.id}`);
     } catch (error) {
-      console.error('Connection error:', error);
       client.disconnect();
     }
   }
@@ -72,7 +69,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (userId) {
       this.connectedUsers.delete(client.id);
       client.broadcast.emit('userOffline', { userId });
-      console.log(`User ${userId} disconnected`);
     }
   }
 
@@ -91,11 +87,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       // Create message in database
       const message = await this.chatService.createMessage(senderId, createMessageDto);
 
-      // Emit to receiver if online
-      this.server.to(`user_${createMessageDto.receiverId}`).emit('newMessage', {
+      // Emit to receiver if online (using receiverId from message)
+      this.server.to(`user_${message.receiverId}`).emit('newMessage', {
         id: message.id,
         senderId: message.senderId,
         receiverId: message.receiverId,
+        bookingId: message.bookingId,
         message: message.message,
         messageType: message.messageType,
         attachmentUrl: message.attachmentUrl,
@@ -110,6 +107,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
           id: message.id,
           senderId: message.senderId,
           receiverId: message.receiverId,
+          bookingId: message.bookingId,
           message: message.message,
           messageType: message.messageType,
           attachmentUrl: message.attachmentUrl,
@@ -118,34 +116,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         },
       };
     } catch (error) {
-      console.error('Error sending message:', error);
-      return { error: error.message };
-    }
-  }
-
-  @SubscribeMessage('markAsRead')
-  async handleMarkAsRead(
-    @MessageBody() data: { messageId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    try {
-      const userId = client.data.userId;
-      
-      if (!userId) {
-        return { error: 'Unauthorized' };
-      }
-
-      const message = await this.chatService.markAsRead(data.messageId, userId);
-
-      // Notify sender that message was read
-      this.server.to(`user_${message.senderId}`).emit('messageRead', {
-        messageId: message.id,
-        readAt: message.readAt,
-      });
-
-      return { success: true, message };
-    } catch (error) {
-      console.error('Error marking message as read:', error);
       return { error: error.message };
     }
   }

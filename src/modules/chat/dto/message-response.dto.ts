@@ -20,6 +20,18 @@ export class MessageResponseDto {
   receiverId: string;
 
   @ApiProperty({
+    example: 'BK-A9098A0F',
+    description: 'Booking ID this message belongs to',
+  })
+  bookingId: string;
+
+  @ApiProperty({
+    example: 'user123',
+    description: 'User ID (booking owner)',
+  })
+  userId: string;
+
+  @ApiProperty({
     example: 'Hello, how can I help you?',
     description: 'Message content',
   })

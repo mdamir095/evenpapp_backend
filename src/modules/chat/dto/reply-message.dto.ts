@@ -11,12 +11,28 @@ export class ReplyMessageDto {
   messageId: string;
 
   @ApiProperty({
-    example: 'chat_1234567890',
-    description: 'Chat session/conversation ID (must match the original message chatId)',
+    example: 'BK-A9098A0F',
+    description: 'Booking ID this reply belongs to',
   })
   @IsString()
   @IsNotEmpty()
-  chatId: string;
+  bookingId: string;
+
+  @ApiProperty({
+    example: 'admin456',
+    description: 'Sender ID (admin/vendor owner ID who is replying)',
+  })
+  @IsString()
+  @IsNotEmpty()
+  senderId: string;
+
+  @ApiProperty({
+    example: 'user123',
+    description: 'Receiver ID (user ID who will receive the reply)',
+  })
+  @IsString()
+  @IsNotEmpty()
+  receiverId: string;
 
   @ApiProperty({
     example: 'Thank you for your message!',

@@ -3,20 +3,28 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateMessageDto {
   @ApiProperty({
+    example: 'BK-A9098A0F',
+    description: 'Booking ID this message belongs to',
+  })
+  @IsString()
+  @IsNotEmpty()
+  bookingId: string;
+
+  @ApiProperty({
     example: 'user123',
-    description: 'ID of the user receiving the message',
+    description: 'Sender ID (user ID who is sending the message)',
+  })
+  @IsString()
+  @IsNotEmpty()
+  senderId: string;
+
+  @ApiProperty({
+    example: 'admin456',
+    description: 'Receiver ID (admin/vendor owner ID who will receive the message)',
   })
   @IsString()
   @IsNotEmpty()
   receiverId: string;
-
-  @ApiProperty({
-    example: 'chat_1234567890',
-    description: 'Chat session/conversation ID',
-  })
-  @IsString()
-  @IsNotEmpty()
-  chatId: string;
 
   @ApiProperty({
     example: 'Hello, how can I help you?',
