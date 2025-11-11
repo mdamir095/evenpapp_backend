@@ -11,6 +11,14 @@ export class ReplyMessageDto {
   messageId: string;
 
   @ApiProperty({
+    example: 'chat_1234567890',
+    description: 'Chat session/conversation ID (must match the original message chatId)',
+  })
+  @IsString()
+  @IsNotEmpty()
+  chatId: string;
+
+  @ApiProperty({
     example: 'Thank you for your message!',
     description: 'Reply message content',
   })

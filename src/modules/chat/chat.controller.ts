@@ -23,6 +23,7 @@ import { ChatService } from './chat.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { ReplyMessageDto } from './dto/reply-message.dto';
 import { MessageResponseDto } from './dto/message-response.dto';
+import { StartChatDto } from './dto/start-chat.dto';
 
 @ApiTags('Chat')
 @Controller('chat')
@@ -30,6 +31,24 @@ import { MessageResponseDto } from './dto/message-response.dto';
 @UseGuards(AuthGuard('jwt'))
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
+
+  @Post('start')
+  @ApiOperation({ summary: 'Start a new chat session' })
+  @ApiBody({ type: StartChatDto })
+  @ApiResponse({
+    status: 201,
+    description: 'New chat session started successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        chatId: { type: 'string', example: 'chat_1234567890_abc12345' },
+      },
+    },
+  })
+  async startChatSession(@Req() req: any, @Body() startChatDto: StartChatDto) {
+    const senderId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    return await this.chatService.startChatSession(senderId, startChatDto.receiverId);
+  }
 
   @Post('message')
   @ApiOperation({ summary: 'Send a message' })
@@ -58,62 +77,53 @@ export class ChatController {
   }
 
   @Get('messages')
-  @ApiOperation({ summary: 'Get messages (optionally filter by user)' })
-  @ApiQuery({ name: 'otherUserId', required: false, type: String, description: 'Filter messages with specific user' })
+  @ApiOperation({ summary: 'Get all messages for the current active chat session' })
+  @ApiQuery({ name: 'chatId', required: true, type: String, description: 'Current active chat session ID' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number', example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page', example: 50 })
   @ApiResponse({
     status: 200,
-    description: 'Messages retrieved successfully',
+    description: 'Messages retrieved successfully (only for current active chat session)',
   })
   async getMessages(
     @Req() req: any,
-    @Query('otherUserId') otherUserId?: string,
+    @Query('chatId') chatId: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 50,
   ) {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
-    return await this.chatService.getMessages(userId, otherUserId, page, limit);
+    return await this.chatService.getMessages(userId, chatId, page, limit);
   }
 
   @Get('unread')
-  @ApiOperation({ summary: 'Get unread messages' })
+  @ApiOperation({ summary: 'Get unread messages for the current active chat session' })
+  @ApiQuery({ name: 'chatId', required: true, type: String, description: 'Current active chat session ID' })
   @ApiResponse({
     status: 200,
-    description: 'Unread messages retrieved successfully',
+    description: 'Unread messages retrieved successfully (only for current active chat session)',
   })
-  async getUnreadMessages(@Req() req: any) {
+  async getUnreadMessages(@Req() req: any, @Query('chatId') chatId: string) {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
-    return await this.chatService.getUnreadMessages(userId);
-  }
-
-  @Get('conversations')
-  @ApiOperation({ summary: 'Get all conversations for the current user' })
-  @ApiResponse({
-    status: 200,
-    description: 'Conversations retrieved successfully',
-  })
-  async getConversations(@Req() req: any) {
-    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
-    return await this.chatService.getConversations(userId);
+    return await this.chatService.getUnreadMessages(userId, chatId);
   }
 
   @Put('message/:id/read')
   @ApiOperation({ summary: 'Mark a message as read' })
   @ApiParam({ name: 'id', description: 'Message ID' })
+  @ApiQuery({ name: 'chatId', required: false, type: String, description: 'Current active chat session ID (optional but recommended)' })
   @ApiResponse({
     status: 200,
     description: 'Message marked as read',
     type: MessageResponseDto,
   })
-  async markAsRead(@Req() req: any, @Param('id') id: string) {
+  async markAsRead(@Req() req: any, @Param('id') id: string, @Query('chatId') chatId?: string) {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
-    return await this.chatService.markAsRead(id, userId);
+    return await this.chatService.markAsRead(id, userId, chatId);
   }
 
   @Put('read-all')
-  @ApiOperation({ summary: 'Mark all messages as read (optionally from a specific sender)' })
-  @ApiQuery({ name: 'senderId', required: false, type: String, description: 'Mark messages from specific sender as read' })
+  @ApiOperation({ summary: 'Mark all messages as read for the current active chat session' })
+  @ApiQuery({ name: 'chatId', required: true, type: String, description: 'Current active chat session ID' })
   @ApiResponse({
     status: 200,
     description: 'Messages marked as read',
@@ -124,9 +134,9 @@ export class ChatController {
       },
     },
   })
-  async markAllAsRead(@Req() req: any, @Query('senderId') senderId?: string) {
+  async markAllAsRead(@Req() req: any, @Query('chatId') chatId: string) {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
-    return await this.chatService.markAllAsRead(userId, senderId);
+    return await this.chatService.markAllAsRead(userId, chatId);
   }
 }
 

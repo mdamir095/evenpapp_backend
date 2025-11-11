@@ -11,6 +11,14 @@ export class CreateMessageDto {
   receiverId: string;
 
   @ApiProperty({
+    example: 'chat_1234567890',
+    description: 'Chat session/conversation ID',
+  })
+  @IsString()
+  @IsNotEmpty()
+  chatId: string;
+
+  @ApiProperty({
     example: 'Hello, how can I help you?',
     description: 'Message content',
   })

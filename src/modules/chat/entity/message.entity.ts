@@ -13,6 +13,9 @@ export class Message {
   receiverId: string; // User ID who receives the message
 
   @Column()
+  chatId: string; // Unique conversation/chat session ID
+
+  @Column()
   message: string; // Message content
 
   @Column({ default: false })

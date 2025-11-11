@@ -6,11 +6,13 @@ import { ChatService } from './chat.service';
 import { ChatController } from './chat.controller';
 import { ChatGateway } from './chat.gateway';
 import { Message } from './entity/message.entity';
+import { UserModule } from '@modules/user/user.module';
 import type { JwtModuleOptions } from '@nestjs/jwt';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Message], 'mongo'),
+    UserModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService): JwtModuleOptions => ({
