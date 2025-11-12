@@ -44,6 +44,7 @@ import { MealTypeModule } from './modules/meal-type/meal-type.module';
 import { CuisineModule } from './modules/cuisine/cuisine.module';
 import { ServingStyleModule } from './modules/serving-style/serving-style.module';
 import { AdditionalServiceModule } from './modules/additional-service/additional-service.module';
+import { ServiceCategoryFormInputsModule } from './modules/service-category-form-inputs/service-category-form-inputs.module';
 
 @Module({
   imports: [
@@ -265,6 +266,7 @@ import { AdditionalServiceModule } from './modules/additional-service/additional
     CuisineModule,
     ServingStyleModule,
     AdditionalServiceModule,
+    ServiceCategoryFormInputsModule,
     SupabaseModule
   ],
   controllers: [AppController],
