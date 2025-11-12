@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException,NotFoundException} from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ObjectId } from 'mongodb';
@@ -18,6 +18,7 @@ import { LocationService } from '@modules/location/location.service';
 import { UserService } from '@modules/user/user.service';
 import { CategoryPricingHelper } from '@modules/vendor/helpers/category-pricing.helper';
 import { SupabaseService } from '@shared/modules/supabase/supabase.service';
+import { BookingStatus } from '@shared/enums/bookingStatus';
 
 @Injectable()
 export class BookingService {
@@ -45,31 +46,98 @@ export class BookingService {
     page = 1,
     limit = 10,
     search?: string,
-    status?: string,
+    status?: string | string[],
     bookingType?: 'venue' | 'vendor',
     dateFrom?: string,
     dateTo?: string,
   ): Promise<{ bookings: any[]; total: number; page: number; limit: number }> {
     try {
-      const where: any = { isDeleted: false };
+      // Build conditions array to ensure all filters are properly combined with $and
+      const andConditions: any[] = [
+        { isDeleted: false } // Always include isDeleted check
+      ];
       
-      // Add status filter
+      // Add status filter - support both single status and array of statuses
       if (status) {
-        where.bookingStatus = status;
+        let statusArray: string[] = [];
+        
+        // Handle both string and array inputs
+        if (Array.isArray(status)) {
+          statusArray = status.filter(s => s && s.trim());
+        } else if (typeof status === 'string' && status.trim()) {
+          statusArray = [status.trim()];
+        }
+        
+        if (statusArray.length > 0) {
+          // Normalize all statuses to lowercase and map to enum values
+          const normalizedStatuses = statusArray.map(s => s.toLowerCase().trim());
+          console.log(`Booking findAllForAdmin - Normalized statuses:`, normalizedStatuses);
+          
+          // Build status filter - support multiple statuses
+          const statusConditions: any[] = [];
+          
+          normalizedStatuses.forEach(normalizedStatus => {
+            if (normalizedStatus === 'pending') {
+              // For pending, we need to match: 'pending', null, or missing field
+              statusConditions.push(
+                { bookingStatus: BookingStatus.PENDING },
+                { bookingStatus: 'pending' },
+                { bookingStatus: null },
+                { bookingStatus: { $exists: false } }
+              );
+            } else {
+              // Map to enum value - try lowercase first, then uppercase for backward compatibility
+              const enumValue = normalizedStatus as BookingStatus;
+              // Try multiple formats: enum value, lowercase string, and uppercase string (for backward compatibility)
+              statusConditions.push(
+                { bookingStatus: enumValue },
+                { bookingStatus: normalizedStatus },
+                { bookingStatus: normalizedStatus.toUpperCase() }
+              );
+            }
+          });
+          
+          // If we have multiple conditions (either from multiple statuses or multiple format attempts),
+          // wrap them in $or. If single condition, use directly.
+          if (statusConditions.length === 1) {
+            andConditions.push(statusConditions[0]);
+            console.log(`Booking findAllForAdmin - Single status condition:`, JSON.stringify(statusConditions[0], null, 2));
+          } else if (statusConditions.length > 1) {
+            // Wrap all status conditions in $or since we're trying multiple formats
+            andConditions.push({ $or: statusConditions });
+            console.log(`Booking findAllForAdmin - Multiple status conditions with $or (${statusConditions.length} conditions):`, JSON.stringify({ $or: statusConditions }, null, 2));
+          }
+        }
       }
       
       // Add booking type filter
       if (bookingType) {
-        where.bookingType = bookingType;
+        andConditions.push({ bookingType: bookingType });
       }
       
       // Add date range filter
       if (dateFrom && dateTo) {
-        where.eventDate = {
-          $gte: new Date(dateFrom),
-          $lte: new Date(dateTo)
-        };
+        andConditions.push({
+          eventDate: {
+            $gte: new Date(dateFrom),
+            $lte: new Date(dateTo)
+          }
+        });
       }
+
+      // Build final where clause
+      // Always use $and for consistency and to ensure proper filtering
+      let where: any;
+      if (andConditions.length === 1) {
+        where = andConditions[0];
+      } else {
+        // Use $and for all queries with multiple conditions
+        where = { $and: andConditions };
+      }
+
+      console.log('Booking findAllForAdmin - Initial where clause:', JSON.stringify(where, null, 2));
+      console.log('Booking findAllForAdmin - Number of andConditions:', andConditions.length);
+      console.log('Booking findAllForAdmin - andConditions:', JSON.stringify(andConditions, null, 2));
 
       let filteredVenueIds: string[] | undefined;
       if (search && search.trim().length > 0) {
@@ -123,18 +191,114 @@ export class BookingService {
           return { bookings: [], total: 0, page, limit };
         }
 
-        where.$or = [
-          { venueId: { $in: allServiceIds } },
-          { vendorId: { $in: allServiceIds } }
-        ];
+        // Add search filter (venue/vendor IDs) to existing conditions
+        andConditions.push({
+          $or: [
+            { venueId: { $in: allServiceIds } },
+            { vendorId: { $in: allServiceIds } }
+          ]
+        });
+        
+        // Rebuild where with $and to include search filter
+        where = { $and: andConditions };
       }
 
-      const bookings = await this.bookingRepo.findAndCount({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        order: { createdAt: 'DESC' },
-      });
+      console.log('Booking findAllForAdmin - Final where clause:', JSON.stringify(where, null, 2));
+
+      // Debug: Check what statuses exist in the database
+      if (status) {
+        try {
+          // Get all unique statuses in the database
+          const allBookings = await this.bookingRepo.find({
+            where: { isDeleted: false } as any,
+            take: 100,
+            select: ['bookingStatus', 'bookingId']
+          });
+          
+          const uniqueStatuses = [...new Set(allBookings.map((b: any) => b.bookingStatus))];
+          console.log('Booking findAllForAdmin - All unique statuses found in DB:', uniqueStatuses);
+          console.log('Booking findAllForAdmin - Sample booking statuses from DB:', 
+            allBookings.slice(0, 10).map((b: any) => ({ 
+              bookingId: b.bookingId, 
+              status: b.bookingStatus, 
+              statusType: typeof b.bookingStatus,
+              statusValue: JSON.stringify(b.bookingStatus)
+            }))
+          );
+          
+          // Count bookings by status
+          const statusCounts: Record<string, number> = {};
+          allBookings.forEach((b: any) => {
+            const stat = b.bookingStatus || 'null/undefined';
+            statusCounts[stat] = (statusCounts[stat] || 0) + 1;
+          });
+          console.log('Booking findAllForAdmin - Status counts:', statusCounts);
+          
+          // Test query with COMPLETED status directly
+          const completedTest = await this.bookingRepo.find({
+            where: { 
+              isDeleted: false,
+              bookingStatus: 'completed'
+            } as any,
+            take: 5
+          });
+          console.log(`Booking findAllForAdmin - Direct COMPLETED query found ${completedTest.length} bookings`);
+          
+          // Test query with case-insensitive
+          const completedTestLower = await this.bookingRepo.find({
+            where: { 
+              isDeleted: false,
+              bookingStatus: 'completed'
+            } as any,
+            take: 5
+          });
+          console.log(`Booking findAllForAdmin - Direct 'completed' (lowercase) query found ${completedTestLower.length} bookings`);
+        } catch (debugError) {
+          console.error('Booking findAllForAdmin - Error checking sample bookings:', debugError);
+        }
+      }
+
+      let bookings: [any[], number];
+      try {
+        // First, let's test the count separately to debug
+        const testCount = await this.bookingRepo.count({ where } as any);
+        console.log(`Booking findAllForAdmin - Test count query result: ${testCount}`);
+        
+        bookings = await this.bookingRepo.findAndCount({
+          where,
+          skip: (page - 1) * limit,
+          take: limit,
+          order: { createdAt: 'DESC' },
+        });
+        console.log(`Booking findAllForAdmin - Query executed successfully. Found ${bookings[1]} bookings (findAndCount)`);
+        console.log(`Booking findAllForAdmin - Counts match: ${testCount === bookings[1] ? 'YES' : 'NO'} (test: ${testCount}, findAndCount: ${bookings[1]})`);
+      } catch (error) {
+        console.error('Booking findAllForAdmin - Query error:', error);
+        console.error('Booking findAllForAdmin - Error details:', JSON.stringify(error, null, 2));
+        throw error;
+      }
+
+      // Debug: Log booking statuses to see what's in the database
+      if (status) {
+        console.log(`Booking findAllForAdmin - Found ${bookings[1]} bookings with status filter: ${status}`);
+        if (bookings[0]?.length > 0) {
+          console.log('Booking findAllForAdmin - Sample booking status:', (bookings[0][0] as any)?.bookingStatus);
+          console.log('Booking findAllForAdmin - Sample booking data:', JSON.stringify((bookings[0][0] as any), null, 2));
+        } else {
+          // Check all bookings to see what statuses exist
+          try {
+            const allBookings = await this.bookingRepo.find({
+              where: { isDeleted: false },
+              take: 5,
+              select: ['bookingStatus']
+            });
+            console.log('Booking findAllForAdmin - Sample booking statuses in DB:', allBookings.map((b: any) => b.bookingStatus));
+            console.log('Booking findAllForAdmin - Total bookings in DB:', await this.bookingRepo.count({ where: { isDeleted: false } }));
+          } catch (countError) {
+            console.error('Booking findAllForAdmin - Error checking DB statuses:', countError);
+          }
+        }
+      }
 
       const bookingsWithVenues = await Promise.all(
         bookings[0]?.map(async (booking) => {
@@ -254,9 +418,13 @@ export class BookingService {
           };
         }),
       );
+      
+      const finalTotal = bookings[1] || 0;
+      console.log(`Booking findAllForAdmin - Final return: total=${finalTotal}, bookings.length=${bookingsWithVenues.length}, page=${page}, limit=${limit}`);
+      
       return {
         bookings: bookingsWithVenues,
-        total: bookings[1] || 0,
+        total: finalTotal,
         page,
         limit,
       };
@@ -498,7 +666,19 @@ export class BookingService {
   }
 
   async findByBookingId(bookingId: string, userId?: string): Promise<any> {
-    const booking = await this.bookingRepo.findOne({ where: { bookingId } as any } as any);
+    // Try to find by bookingId first (custom format like BK-A9098A0F)
+    let booking = await this.bookingRepo.findOne({ where: { bookingId } as any } as any);
+    
+    // If not found by bookingId, try to find by MongoDB _id
+    if (!booking && ObjectId.isValid(bookingId)) {
+      try {
+        const objectId = new ObjectId(bookingId);
+        booking = await this.bookingRepo.findOne({ where: { _id: objectId } as any } as any);
+      } catch (error) {
+        console.log('Error searching by ObjectId in findByBookingId:', error);
+      }
+    }
+    
     if (!booking) {
       throw new NotFoundException('Booking not found');
     }
@@ -512,19 +692,7 @@ export class BookingService {
     console.log('findByBookingId - Raw booking referenceImages type:', typeof (booking as any).referenceImages);
     console.log('findByBookingId - Raw booking referenceImages is array:', Array.isArray((booking as any).referenceImages));
     
-    if (userId && (booking as any).userId) {
-      // Convert both to strings for comparison
-      const tokenUserId = String(userId);
-      const bookingUserId = String((booking as any).userId);
-      
-      console.log('findByBookingId - Token user ID (string):', tokenUserId);
-      console.log('findByBookingId - Booking user ID (string):', bookingUserId);
-      console.log('findByBookingId - IDs match:', tokenUserId === bookingUserId);
-      
-      if (tokenUserId !== bookingUserId) {
-      throw new BadRequestException('You can only view your own bookings');
-      }
-    }
+    // Removed validation check - allow admins/vendors to view any booking for accept/reject operations
 
     let venue = null;
     let vendor = null;
@@ -674,7 +842,8 @@ export class BookingService {
       userId: userIdString, // Explicitly set as string
       referenceImages: uploadedImageUrls,
       eventDate: dto.eventDate,
-      endDate: dto.endDate
+      endDate: dto.endDate,
+      bookingStatus: BookingStatus.PENDING // Explicitly set to pending by default
     });
     
     console.log('Booking Service - Created entity userId:', entity.userId, 'Type:', typeof entity.userId);
@@ -976,20 +1145,20 @@ export class BookingService {
     }
     
     // Check if booking can be cancelled
-    const currentStatus = (booking as any).bookingStatus;
-    if (currentStatus === 'CANCELLED') {
+    const currentStatus = ((booking as any).bookingStatus || '').toLowerCase();
+    if (currentStatus === 'cancelled') {
       throw new BadRequestException('Booking is already cancelled');
     }
-    if (currentStatus === 'COMPLETED') {
+    if (currentStatus === 'completed') {
       throw new BadRequestException('Cannot cancel a completed booking');
     }
-    if (currentStatus === 'REJECTED') {
+    if (currentStatus === 'rejected') {
       throw new BadRequestException('Cannot cancel a rejected booking');
     }
 
     // Update booking status to cancelled
     const updateData = {
-      bookingStatus: 'CANCELLED',
+      bookingStatus: 'cancelled',
       cancellationReason: dto.cancellationReason,
       cancellationDate: new Date(),
       notes: dto.notes || null,
@@ -1002,6 +1171,147 @@ export class BookingService {
 
     // Return updated booking
     return await this.findByBookingId(bookingId, userId);
+  }
+
+  async acceptBooking(bookingId: string, dto: any, userId: string): Promise<any> {
+    // Try to find by bookingId first (custom format like BK-A9098A0F)
+    let booking = await this.bookingRepo.findOne({ where: { bookingId } as any } as any);
+    
+    // If not found by bookingId, try to find by MongoDB _id
+    if (!booking && ObjectId.isValid(bookingId)) {
+      try {
+        const objectId = new ObjectId(bookingId);
+        booking = await this.bookingRepo.findOne({ where: { _id: objectId } as any } as any);
+      } catch (error) {
+        console.log('Error searching by ObjectId:', error);
+      }
+    }
+    
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    // Check if booking can be accepted
+    const currentStatus = ((booking as any).bookingStatus || '').toLowerCase();
+    if (currentStatus === 'confirmed') {
+      throw new BadRequestException('Booking is already confirmed');
+    }
+    if (currentStatus === 'cancelled') {
+      throw new BadRequestException('Cannot accept a cancelled booking');
+    }
+    if (currentStatus === 'completed') {
+      throw new BadRequestException('Cannot accept a completed booking');
+    }
+    if (currentStatus === 'rejected') {
+      throw new BadRequestException('Cannot accept a rejected booking');
+    }
+
+    // Update booking status to confirmed
+    const updateData: any = {
+      bookingStatus: 'confirmed',
+    };
+
+    // Add notes if provided
+    if (dto.notes) {
+      updateData.notes = dto.notes;
+    }
+
+    // Clear rejection fields if they exist
+    updateData.rejectionReason = null;
+    updateData.rejectionDate = null;
+
+    // Use the actual bookingId from the found booking, or the provided one
+    const actualBookingId = (booking as any).bookingId || bookingId;
+    console.log('Accept Booking - actualBookingId:', actualBookingId);
+    
+    // Update the booking using Object.assign and save (more reliable)
+    Object.assign(booking, updateData);
+    const updatedBooking = await this.bookingRepo.save(booking);
+    
+    console.log('Accept Booking - Updated booking:', updatedBooking);
+
+    // Return updated booking using the actual bookingId
+    return await this.findByBookingId(actualBookingId, userId);
+  }
+
+  async rejectBooking(bookingId: string, dto: any, userId: string): Promise<any> {
+    try {
+      // Try to find by bookingId first (custom format like BK-A9098A0F)
+      let booking = await this.bookingRepo.findOne({ where: { bookingId } as any } as any);
+      
+      // If not found by bookingId, try to find by MongoDB _id
+      if (!booking && ObjectId.isValid(bookingId)) {
+        try {
+          const objectId = new ObjectId(bookingId);
+          booking = await this.bookingRepo.findOne({ where: { _id: objectId } as any } as any);
+        } catch (error) {
+          console.log('Error searching by ObjectId:', error);
+        }
+      }
+      
+      if (!booking) {
+        throw new NotFoundException('Booking not found');
+      }
+
+      // Check if booking can be rejected
+      const currentStatus = ((booking as any).bookingStatus || '').toLowerCase();
+      if (currentStatus === 'rejected') {
+        throw new BadRequestException('Booking is already rejected');
+      }
+      if (currentStatus === 'cancelled') {
+        throw new BadRequestException('Cannot reject a cancelled booking');
+      }
+      if (currentStatus === 'completed') {
+        throw new BadRequestException('Cannot reject a completed booking');
+      }
+      if (currentStatus === 'confirmed') {
+        throw new BadRequestException('Cannot reject a confirmed booking. Please cancel it instead.');
+      }
+
+      // Update booking status to rejected
+      // Support both 'rejectionReason' and 'reason' fields
+      const rejectionReason = dto.rejectionReason || dto.reason;
+      
+      if (!rejectionReason) {
+        throw new BadRequestException('Rejection reason is required');
+      }
+      
+      const updateData: any = {
+        bookingStatus: 'rejected',
+        rejectionReason: rejectionReason,
+        rejectionDate: new Date(),
+      };
+
+      // Add notes if provided
+      if (dto.notes) {
+        updateData.notes = dto.notes;
+      }
+
+      // Use the actual bookingId from the found booking, or the provided one
+      const actualBookingId = (booking as any).bookingId || bookingId;
+      console.log('Reject Booking - actualBookingId:', actualBookingId);
+      console.log('Reject Booking - Updating with:', updateData);
+      
+      // Update the booking using Object.assign and save (more reliable)
+      Object.assign(booking, updateData);
+      const updatedBooking = await this.bookingRepo.save(booking);
+      
+      console.log('Reject Booking - Updated booking:', updatedBooking);
+
+      // Return updated booking using the actual bookingId
+      return await this.findByBookingId(actualBookingId, userId);
+    } catch (error) {
+      console.error('Reject Booking Error:', error);
+      console.error('Reject Booking Error Stack:', error.stack);
+      
+      // Re-throw known exceptions
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      // Wrap unexpected errors
+      throw new BadRequestException('Failed to reject booking: ' + (error.message || 'Unknown error'));
+    }
   }
 
   private getRatingLabel(rating: number): string {
@@ -1089,5 +1399,103 @@ export class BookingService {
     // Final fallback
     console.log('Using final fallback price: 15000');
     return 15000;
+  }
+
+  /**
+   * Migration method to update existing bookings that don't have bookingStatus set
+   * Sets bookingStatus to PENDING for all bookings where bookingStatus is null, undefined, or missing
+   */
+  async migrateBookingStatus(): Promise<{ updated: number; message: string }> {
+    try {
+      console.log('Starting booking status migration...');
+      
+      // Find all bookings that don't have bookingStatus or have null/undefined bookingStatus
+      const bookingsWithoutStatus = await this.bookingRepo.find({
+        where: {
+          isDeleted: false,
+          $or: [
+            { bookingStatus: null },
+            { bookingStatus: { $exists: false } }
+          ]
+        } as any
+      });
+
+      console.log(`Found ${bookingsWithoutStatus.length} bookings without bookingStatus`);
+
+      // Update all bookings without status to PENDING
+      let updatedCount = 0;
+      for (const booking of bookingsWithoutStatus) {
+        try {
+          await this.bookingRepo.update(
+            { _id: (booking as any)._id || booking.id } as any,
+            { bookingStatus: 'pending' } as any
+          );
+          updatedCount++;
+        } catch (error) {
+          console.error(`Error updating booking ${(booking as any).bookingId || (booking as any)._id}:`, error);
+        }
+      }
+
+      // Also update bookings with empty string status
+      const bookingsWithEmptyStatus = await this.bookingRepo.find({
+        where: {
+          isDeleted: false,
+          bookingStatus: ''
+        } as any
+      });
+
+      console.log(`Found ${bookingsWithEmptyStatus.length} bookings with empty bookingStatus`);
+
+      for (const booking of bookingsWithEmptyStatus) {
+        try {
+          await this.bookingRepo.update(
+            { _id: (booking as any)._id || booking.id } as any,
+            { bookingStatus: 'pending' } as any
+          );
+          updatedCount++;
+        } catch (error) {
+          console.error(`Error updating booking ${(booking as any).bookingId || (booking as any)._id}:`, error);
+        }
+      }
+
+      // Also convert all uppercase statuses to lowercase
+      const uppercaseStatuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED', 'REJECTED'];
+      let convertedCount = 0;
+      
+      for (const upperStatus of uppercaseStatuses) {
+        const lowerStatus = upperStatus.toLowerCase();
+        const bookingsWithUpperStatus = await this.bookingRepo.find({
+          where: {
+            isDeleted: false,
+            bookingStatus: upperStatus
+          } as any
+        });
+
+        console.log(`Found ${bookingsWithUpperStatus.length} bookings with status '${upperStatus}'`);
+
+        for (const booking of bookingsWithUpperStatus) {
+          try {
+            await this.bookingRepo.update(
+              { _id: (booking as any)._id || booking.id } as any,
+              { bookingStatus: lowerStatus } as any
+            );
+            convertedCount++;
+          } catch (error) {
+            console.error(`Error converting booking ${(booking as any).bookingId || (booking as any)._id}:`, error);
+          }
+        }
+      }
+
+      console.log(`Converted ${convertedCount} bookings from uppercase to lowercase status.`);
+      console.log(`Migration completed. Updated ${updatedCount} bookings, converted ${convertedCount} statuses.`);
+      
+      return {
+        updated: updatedCount + convertedCount,
+        message: `Successfully updated ${updatedCount} bookings to pending status and converted ${convertedCount} uppercase statuses to lowercase`
+      };
+    } catch (error) {
+      console.error('Error in migrateBookingStatus:', error);
+      throw new BadRequestException(`Failed to migrate booking status: ${error.message}`);
+    }
   }
 }

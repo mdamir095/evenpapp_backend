@@ -1,4 +1,4 @@
-import { Body, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Get, HttpCode, Post, Req, Res, UseGuards, BadRequestException } from '@nestjs/common';
 import { Controller } from '@nestjs/common';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { AuthService } from './auth.service';
@@ -118,7 +118,17 @@ export class AuthController {
     @ApiBody({ type: GoogleLoginDto })
     @ApiResponse({ status: 200, description: 'Google login successful' })
     async googleLogin(@Body() dto: GoogleLoginDto) {
-    return this.authService.googleLogin(dto.token);
+      console.log('Google login controller - Received DTO:', { 
+        hasToken: !!dto.token, 
+        tokenLength: dto.token?.length,
+        tokenPreview: dto.token?.substring(0, 50) + '...'
+      });
+      
+      if (!dto || !dto.token) {
+        throw new BadRequestException('Token is required in request body');
+      }
+      
+      return this.authService.googleLogin(dto.token);
     }
     
     @Post('send-otp/phone')

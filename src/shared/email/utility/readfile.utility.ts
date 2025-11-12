@@ -17,6 +17,12 @@ export function readFilesRecursively<T extends IFileData>(
   dirPath: string,
   mapFn?: (file: IFileData) => T,
 ): T[] {
+  // Check if directory exists before trying to read it
+  if (!fs.existsSync(dirPath)) {
+    console.warn(`Warning: Directory does not exist: ${dirPath}`);
+    return [];
+  }
+  
   const files = fs.readdirSync(dirPath, { withFileTypes: true });
   const result: IFileData[] = [];
 

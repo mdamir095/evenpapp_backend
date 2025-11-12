@@ -63,6 +63,7 @@ export class VendorResponseDto {
 
   @ApiProperty({ description: 'Price of the vendor' })
   @Expose()
+  @Transform(({ obj }) => obj.price || 0)
   price: number;
 
   @ApiProperty({ 
@@ -124,5 +125,20 @@ export class VendorResponseDto {
   @ApiProperty({ description: 'Enterprise name associated with this vendor' })
   @Expose()
   enterpriseName: string;
+
+  @ApiProperty({ description: "URL of the vendor's image" })
+  @Expose()
+  @Transform(({ obj }) => obj.imageUrl || obj.formData?.images?.[0] || 'https://t3.ftcdn.net/jpg/05/06/74/32/360_F_506743235_coW6QAlhxlBWjnRk0VNsHqaXGGH9F4JS.jpg')
+  image: string;
+
+  @ApiProperty({ description: 'Average rating of the vendor' })
+  @Expose()
+  @Transform(({ obj }) => obj.averageRating || 0)
+  rating: number;
+
+  @ApiProperty({ description: 'Total number of ratings/reviews for the vendor' })
+  @Expose()
+  @Transform(({ obj }) => obj.totalRatings || 0)
+  reviews: number;
 
 }

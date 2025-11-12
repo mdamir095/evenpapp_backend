@@ -128,6 +128,69 @@ export class QuotationRequestService {
     }
   }
 
+  async findAllForAdmin(page = 1, limit = 10, search?: string): Promise<{ data: QuotationRequest[]; total: number; page: number; limit: number }> {
+    try {
+      console.log('Quotation Request Service - findAllForAdmin called');
+      
+      const where: any = { 
+        isDeleted: false,
+      };
+      
+      if (search && search.trim().length > 0) {
+        const regex = new RegExp(search, 'i');
+        where.$or = [
+          { eventHall: { $regex: regex } },
+          { venueAddress: { $regex: regex } },
+        ];
+      }
+
+      console.log('Quotation Request Service - Admin query where clause:', JSON.stringify(where, null, 2));
+
+      const [data, total] = await this.repo.findAndCount({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        order: { createdAt: 'DESC' as any },
+      });
+
+      console.log('Quotation Request Service - Admin found', total, 'quotation requests');
+      
+      // Process referenceImages for each quotation
+      const processedData = data.map((quotation: any) => {
+        let referenceImages = quotation.referenceImages || 
+                             quotation.referenceimages || 
+                             (quotation as any).reference_images || 
+                             [];
+        
+        if (Array.isArray(referenceImages)) {
+          referenceImages = referenceImages.filter((url: string) => {
+            if (!url || typeof url !== 'string') {
+              return false;
+            }
+            return !url.includes('via.placeholder.com') && !url.includes('placeholder');
+          });
+        } else {
+          referenceImages = [];
+        }
+        
+        return {
+          ...quotation,
+          referenceImages: referenceImages,
+        };
+      });
+      
+      return {
+        data: processedData,
+        total,
+        page,
+        limit,
+      };
+    } catch (error) {
+      console.error('❌ Error in findAllForAdmin:', error);
+      throw new Error(`Failed to fetch quotation requests: ${error.message}`);
+    }
+  }
+
   async findAll(page = 1, limit = 10, userId?: string, search?: string): Promise<{ data: QuotationRequest[]; total: number; page: number; limit: number }> {
     try {
       console.log('Quotation Request Service - findAll called with userId:', userId, 'Type:', typeof userId);
@@ -292,6 +355,62 @@ export class QuotationRequestService {
         throw error;
       }
       throw new Error(`Failed to fetch quotation request: ${error.message}`);
+    }
+  }
+
+  async update(id: string, updateDto: Partial<CreateQuotationRequestDto>): Promise<QuotationRequest> {
+    try {
+      const entity = await this.findOne(id);
+      
+      // Handle reference images if provided
+      let uploadedImageUrls: string[] = entity.referenceImages || [];
+      
+      if (updateDto.referenceImages && updateDto.referenceImages.length > 0) {
+        // Check if images are base64 (new uploads) or URLs (existing)
+        const base64Images = updateDto.referenceImages.filter(img => img.startsWith('data:image'));
+        const existingUrls = updateDto.referenceImages.filter(img => !img.startsWith('data:image'));
+        
+        if (base64Images.length > 0) {
+          try {
+            const newUploadedUrls = await this.uploadBase64Images(base64Images);
+            uploadedImageUrls = [...existingUrls, ...newUploadedUrls];
+          } catch (uploadError) {
+            console.error('❌ Error uploading reference images during update:', uploadError);
+            // Keep existing images if upload fails
+            uploadedImageUrls = existingUrls.length > 0 ? existingUrls : entity.referenceImages || [];
+          }
+        } else {
+          // All are existing URLs
+          uploadedImageUrls = existingUrls;
+        }
+      }
+      
+      // Update entity fields
+      if (updateDto.eventHall !== undefined) entity.eventHall = updateDto.eventHall;
+      if (updateDto.eventDate !== undefined) entity.eventDate = new Date(updateDto.eventDate);
+      if (updateDto.endDate !== undefined) entity.endDate = new Date(updateDto.endDate);
+      if (updateDto.startTime !== undefined) entity.startTime = updateDto.startTime;
+      if (updateDto.endTime !== undefined) entity.endTime = updateDto.endTime;
+      if (updateDto.venueAddress !== undefined) entity.venueAddress = updateDto.venueAddress;
+      if (updateDto.photographerType !== undefined) entity.photographerType = updateDto.photographerType;
+      if (updateDto.specialRequirement !== undefined) entity.specialRequirement = updateDto.specialRequirement;
+      if (updateDto.expectedGuests !== undefined) entity.expectedGuests = updateDto.expectedGuests;
+      if (updateDto.coverageDuration !== undefined) entity.coverageDuration = updateDto.coverageDuration;
+      if (updateDto.numberOfPhotographers !== undefined) entity.numberOfPhotographers = updateDto.numberOfPhotographers;
+      if (updateDto.budgetRange !== undefined) entity.budgetRange = updateDto.budgetRange;
+      if (updateDto.vendorId !== undefined) entity.vendorId = updateDto.vendorId;
+      if (updateDto.venueId !== undefined) entity.venueId = updateDto.venueId;
+      if (updateDto.userId !== undefined) entity.userId = updateDto.userId;
+      
+      // Update reference images
+      entity.referenceImages = uploadedImageUrls;
+
+      return await this.repo.save(entity);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new Error(`Failed to update quotation request: ${error.message}`);
     }
   }
 

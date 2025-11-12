@@ -422,7 +422,6 @@ export class VendorController {
     return this.vendorService.findOneDetail(id);
   }
 
-
   @Get(':id')
   @UseGuards(AuthGuard('jwt'), FeatureGuard)
   @Features(FeatureType.VENDOR_MANAGEMENT)

@@ -17,6 +17,13 @@ export class Booking extends BaseModel {
       this.bookingId = `BK-${short}`;
     }
   }
+
+  @BeforeInsert()
+  setDefaultBookingStatus() {
+    if (!this.bookingStatus) {
+      this.bookingStatus = BookingStatus.PENDING;
+    }
+  }
   @Column()
   eventHall: string;
 
@@ -124,4 +131,10 @@ export class Booking extends BaseModel {
 
   @Column({ nullable: true })
   cancellationDate?: Date;
+
+  @Column({ nullable: true })
+  rejectionReason?: string;
+
+  @Column({ nullable: true })
+  rejectionDate?: Date;
 }

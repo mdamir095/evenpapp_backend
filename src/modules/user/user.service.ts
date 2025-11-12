@@ -308,12 +308,45 @@ export class UserService {
   }
 
   async createFromGoogle(payload: any) {
+    // Find or create the default role
+    let defaultRole = await this.roleService.findByName(RoleType.USER);
+    if (!defaultRole) {
+      let userFeature = await this.featureService.findByName(FeatureType.USER);
+      if (!userFeature) {
+        userFeature = await this.featureService.create({
+          name: FeatureType.USER,
+          isActive: true
+        });
+      }
+      // Create the 'User' role with the 'user' feature
+      defaultRole = await this.roleService.save({
+        name: RoleType.USER,
+        featureIds: [new ObjectId(userFeature.id)],
+      });
+    }
+
+    // Generate a random password for Google users (they won't use it)
+    const randomPassword = await bcrypt.hash(Math.random().toString(36) + Date.now().toString(36), 10);
+
     const user = this.userRepository.create({
-      email: payload.email,
-      firstName: payload.given_name,
-      lastName: payload.family_name,
-      isEmailVerified: payload.email_verified,
-      // ...any other fields you want to set
+      email: payload.email?.toLowerCase() || '',
+      firstName: payload.given_name || payload.name || 'User',
+      lastName: payload.family_name || '',
+      isEmailVerified: payload.email_verified || false,
+      password: randomPassword, // Required field, but Google users won't use it
+      organizationName: payload.organizationName || '', // Required field
+      countryCode: payload.countryCode || '+1', // Required field, default to +1
+      phoneNumber: payload.phoneNumber || '', // Required field
+      roleIds: [defaultRole.id], // Required field - assign default role
+      address: payload.address || '', // Required field
+      city: payload.city || '', // Required field
+      state: payload.state || '', // Required field
+      pincode: payload.pincode || '', // Required field
+      isEnterpriseAdmin: false, // Required field
+      isMobileAppUser: true,
+      userType: 'USER',
+      profileImage: payload.picture || null, // Use Google profile picture if available
+      isActive: true,
     });
     return this.userRepository.save(user);
   }
@@ -1297,65 +1330,111 @@ export class UserService {
     try {
       console.log('Upload method called, NODE_ENV:', process.env.NODE_ENV);
       
-      if (process.env.NODE_ENV === 'local') {
-        // For local development, use Supabase
-        console.log('Using Supabase for local upload');
-        
-        // Generate unique filename to avoid conflicts
-        const timestamp = Date.now();
-        const randomSuffix = Math.random().toString(36).substring(2, 8);
-        const fileExtension = path.extname(file.originalname);
-        const fileName = `profile_${timestamp}_${randomSuffix}${fileExtension}`;
-
-        const uploadResult = await this.supabaseService.upload({
-          filePath: fileName,
-          file: file.buffer,
-          contentType: file.mimetype,
-          bucket: 'profiles',
-        });
-        console.log('Supabase upload result:', uploadResult);
-        return uploadResult.publicUrl || '';
-      } else {
-        // For production, use AWS S3
-        console.log('Using AWS S3 for production upload');
-        
-        const awsUploadReqDto = {
-          Bucket: this.awsConfig.bucketName,
-          Key:
-            this.awsConfig.bucketFolderName +
-            '/' +
-            this.awsConfig.bucketTempFolderName +
-            '/' +
-            file.originalname,
-          Body: file.buffer,
-          ContentType: file.mimetype,
-        };
-        const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
-        console.log('AWS S3 upload result:', response);
-        return response?.Location || '';
+      // Validate file object
+      if (!file) {
+        throw new BadRequestException('File is required');
       }
-    } catch (error) {
-      console.error('Upload error:', error);
-      // Fallback to Supabase if AWS fails
-      try {
-        console.log('Falling back to Supabase upload');
-        const timestamp = Date.now();
-        const randomSuffix = Math.random().toString(36).substring(2, 8);
-        const fileExtension = path.extname(file.originalname);
-        const fileName = `profile_${timestamp}_${randomSuffix}${fileExtension}`;
-
-        const uploadResult = await this.supabaseService.upload({
-          filePath: fileName,
-          file: file.buffer,
-          contentType: file.mimetype,
-          bucket: 'profiles',
-        });
-        console.log('Supabase fallback upload result:', uploadResult);
-        return uploadResult.publicUrl || '';
-      } catch (fallbackError) {
-        console.error('Fallback upload also failed:', fallbackError);
-        throw new Error('File upload failed: ' + fallbackError.message);
+      if (!file.buffer) {
+        throw new BadRequestException('File buffer is missing');
       }
+      if (!file.mimetype) {
+        throw new BadRequestException('File mimetype is missing');
+      }
+      
+      // Generate unique filename to avoid conflicts
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const originalName = file.originalname || 'image';
+      const fileExtension = path.extname(originalName) || '.jpg';
+      const fileName = `profile_${timestamp}_${randomSuffix}${fileExtension}`;
+      
+      // Check if Supabase is available
+      const isSupabaseAvailable = this.supabaseService?.isAvailable?.() || false;
+      
+      // Check if AWS S3 is configured
+      const hasAwsConfig = this.awsConfig && this.awsConfig.bucketName;
+      
+      console.log('Upload configuration:', {
+        isSupabaseAvailable,
+        hasAwsConfig,
+        hasAwsS3Service: !!this.awsS3Service
+      });
+      
+      // Try Supabase first (if available)
+      if (isSupabaseAvailable) {
+        try {
+          console.log('☁️ Trying Supabase upload first');
+          const supabaseBuckets = ['profiles', 'uploads'];
+          
+          for (const bucket of supabaseBuckets) {
+            try {
+              console.log(`☁️ Trying Supabase bucket: ${bucket}`);
+              const uploadResult = await this.supabaseService.upload({
+                filePath: `profile/${fileName}`,
+                file: file.buffer,
+                contentType: file.mimetype,
+                bucket: bucket,
+                upsert: true,
+              });
+              
+              if (uploadResult?.publicUrl) {
+                console.log(`✅ Supabase upload successful (bucket: ${bucket}):`, uploadResult.publicUrl);
+                return uploadResult.publicUrl;
+              }
+            } catch (supabaseError: any) {
+              console.error(`⚠️ Supabase bucket ${bucket} failed:`, supabaseError?.message);
+              continue;
+            }
+          }
+        } catch (supabaseError: any) {
+          console.error('⚠️ Supabase upload failed:', supabaseError?.message);
+        }
+      }
+      
+      // Try AWS S3 as fallback (if configured)
+      if (hasAwsConfig && this.awsS3Service) {
+        try {
+          console.log('☁️ Trying AWS S3 upload');
+          const awsUploadReqDto = {
+            Bucket: this.awsConfig.bucketName,
+            Key:
+              (this.awsConfig.bucketFolderName || '') +
+              '/' +
+              (this.awsConfig.bucketTempFolderName || 'temp') +
+              '/' +
+              fileName,
+            Body: file.buffer,
+            ContentType: file.mimetype,
+          };
+          const response = await this.awsS3Service.uploadFilesToS3Bucket(awsUploadReqDto);
+          if (response?.Location) {
+            console.log('✅ AWS S3 upload successful:', response.Location);
+            return response.Location;
+          }
+        } catch (s3Error: any) {
+          console.error('❌ AWS S3 upload failed:', s3Error?.message);
+        }
+      }
+      
+      // If all uploads failed
+      throw new BadRequestException(
+        'File upload failed: Neither Supabase nor AWS S3 is configured or available. Please configure at least one upload service.'
+      );
+      
+    } catch (error: any) {
+      console.error('Upload error:', {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name
+      });
+      
+      // If it's already a BadRequestException, re-throw it
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      // Otherwise, wrap it
+      throw new BadRequestException(`File upload failed: ${error?.message || 'Unknown error'}`);
     }
   }
 
