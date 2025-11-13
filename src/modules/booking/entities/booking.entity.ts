@@ -137,4 +137,7 @@ export class Booking extends BaseModel {
 
   @Column({ nullable: true })
   rejectionDate?: Date;
+
+  @Column({ type: 'boolean', default: false })
+  hasOffers?: boolean;
 }

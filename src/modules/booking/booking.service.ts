@@ -421,6 +421,9 @@ export class BookingService {
             rating: venueOrVendor?.averageRating || 0,
             imageUrl: venueOrVendor?.imageUrl || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb',
             reviews: venueOrVendor?.totalRatings || 0,
+            hasOffers: (booking as any).hasOffers ?? false, // Include hasOffers flag
+            // Check if current user has submitted an offer (for list view)
+            userHasSubmittedOffer: false, // Will be set in list if needed, but for detail view use the detail endpoint
             // User information
             customerName: user?.firstName + ' ' + user?.lastName || 'Unknown Customer',
             customerEmail: user?.email || 'unknown@example.com',
@@ -656,6 +659,7 @@ export class BookingService {
             rating: venueOrVendor?.averageRating || 0,
             imageUrl: venueOrVendor?.imageUrl || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb',
             reviews: venueOrVendor?.totalRatings || 0,
+            hasOffers: (booking as any).hasOffers ?? false, // Include hasOffers flag
             // Add missing fields for frontend compatibility
             customerName: user?.firstName + ' ' + user?.lastName || 'Unknown Customer',
             customerEmail: user?.email || 'unknown@example.com',
@@ -808,6 +812,49 @@ export class BookingService {
       referenceImages = [];
     }
 
+    // Use stored hasOffers flag from booking (more efficient than querying)
+    const hasOffers = (booking as any).hasOffers ?? false;
+
+    // Check if current user has already submitted an offer for this booking
+    let userHasSubmittedOffer = false;
+    if (userId) {
+      try {
+        const actualBookingId = (booking as any).bookingId || bookingId;
+        
+        // Check unified offers
+        const userUnifiedOffer = await this.offerRepo.findOne({
+          where: {
+            bookingId: actualBookingId,
+            userId: userId,
+            status: { $ne: UnifiedOfferStatus.REJECTED } as any,
+          } as any,
+        });
+        
+        // Check vendor offers (if userId matches vendorId)
+        const userVendorOffer = await this.vendorOfferRepo.findOne({
+          where: {
+            bookingId: actualBookingId,
+            vendorId: userId,
+            status: { $ne: OfferStatus.REJECTED } as any,
+          } as any,
+        });
+        
+        // Check admin offers
+        const userAdminOffer = await this.adminOfferRepo.findOne({
+          where: {
+            bookingId: actualBookingId,
+            userId: userId,
+            status: { $ne: AdminOfferStatus.REJECTED } as any,
+          } as any,
+        });
+        
+        userHasSubmittedOffer = !!(userUnifiedOffer || userVendorOffer || userAdminOffer);
+      } catch (error) {
+        console.error('Error checking if user has submitted offer:', error);
+        userHasSubmittedOffer = false;
+      }
+    }
+
     const bookingData = {
       ...booking,
       status: (booking as any).bookingStatus || 'pending',
@@ -817,12 +864,15 @@ export class BookingService {
       vendor,
       event,
       photographyType,
-      venueOrVenderInfo
+      venueOrVenderInfo,
+      hasOffers,
+      userHasSubmittedOffer
     };
 
     console.log('findByBookingId - Final bookingData referenceImages:', bookingData.referenceImages);
     console.log('findByBookingId - Reference images count:', referenceImages.length);
     console.log('findByBookingId - Reference images:', referenceImages);
+    console.log('findByBookingId - Has offers:', hasOffers);
 
     return bookingData;
   }
@@ -1628,6 +1678,9 @@ export class BookingService {
 
     const savedOffer = await this.vendorOfferRepo.save(offer);
 
+    // Update hasOffers flag for the booking
+    await this.updateBookingHasOffersFlag((booking as any).bookingId || bookingId);
+
     // Send notification to booking user
     try {
       const bookingUser = await this.userService.findById((booking as any).userId);
@@ -1818,6 +1871,9 @@ export class BookingService {
     Object.assign(booking, { bookingStatus: BookingStatus.CONFIRMED });
     await this.bookingRepo.save(booking);
 
+    // Update hasOffers flag (offers still exist, just status changed)
+    await this.updateBookingHasOffersFlag(actualBookingId);
+
     // Create or activate chat session
     let chatId: string | undefined;
     try {
@@ -1968,6 +2024,9 @@ export class BookingService {
 
     const savedOffer = await this.adminOfferRepo.save(offer);
 
+    // Update hasOffers flag for the booking
+    await this.updateBookingHasOffersFlag((booking as any).bookingId || bookingId);
+
     // Send notification to booking user
     try {
       const bookingUser = await this.userService.findById((booking as any).userId);
@@ -2042,6 +2101,9 @@ export class BookingService {
 
     const savedOffer = await this.offerRepo.save(offer);
     const savedOfferResult = Array.isArray(savedOffer) ? savedOffer[0] : savedOffer;
+
+    // Update hasOffers flag for the booking
+    await this.updateBookingHasOffersFlag((booking as any).bookingId || bookingId);
 
     // Get user name for response
     let userName = 'Unknown User';
@@ -2197,5 +2259,56 @@ export class BookingService {
     );
 
     return offersWithUserNames;
+  }
+
+  /**
+   * Update hasOffers flag for a booking based on actual offer counts
+   */
+  private async updateBookingHasOffersFlag(bookingId: string): Promise<void> {
+    try {
+      // Find booking
+      let booking = await this.bookingRepo.findOne({ where: { bookingId } as any } as any);
+      if (!booking && ObjectId.isValid(bookingId)) {
+        try {
+          const objectId = new ObjectId(bookingId);
+          booking = await this.bookingRepo.findOne({ where: { _id: objectId } as any } as any);
+        } catch (error) {
+          console.log('Error searching by ObjectId in updateBookingHasOffersFlag:', error);
+          return;
+        }
+      }
+
+      if (!booking) {
+        console.log('Booking not found for hasOffers update:', bookingId);
+        return;
+      }
+
+      const actualBookingId = (booking as any).bookingId || bookingId;
+
+      // Count offers from all collections
+      const unifiedOfferCount = await this.offerRepo.count({
+        where: { bookingId: actualBookingId } as any,
+      });
+      
+      const vendorOfferCount = await this.vendorOfferRepo.count({
+        where: { bookingId: actualBookingId } as any,
+      });
+      
+      const adminOfferCount = await this.adminOfferRepo.count({
+        where: { bookingId: actualBookingId } as any,
+      });
+      
+      const hasOffers = unifiedOfferCount > 0 || vendorOfferCount > 0 || adminOfferCount > 0;
+
+      // Update booking with hasOffers flag
+      await this.bookingRepo.update(
+        { bookingId: actualBookingId } as any,
+        { hasOffers } as any
+      );
+
+      console.log(`Updated hasOffers flag for booking ${actualBookingId}: ${hasOffers}`);
+    } catch (error) {
+      console.error('Error updating hasOffers flag for booking:', bookingId, error);
+    }
   }
 }

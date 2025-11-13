@@ -143,6 +143,14 @@ export class BookingDetailResponseDto {
   @Expose()
   foodPreference?: string
 
+  @ApiProperty({ description: 'Whether this booking has any offers', example: true })
+  @Expose()
+  hasOffers?: boolean
+
+  @ApiProperty({ description: 'Whether the current user has already submitted an offer for this booking', example: false })
+  @Expose()
+  userHasSubmittedOffer?: boolean
+
   @ApiProperty({ required: false })
   @Expose()
   @Transform(({ obj }) => {

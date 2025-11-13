@@ -71,4 +71,14 @@ export class BookingUserResponseDto {
   @Expose()
   @Transform(({ obj }) => obj.bookingStatus || 'Pending')
   status: string;
+
+  @ApiProperty({ description: 'Whether this booking has any offers', example: true })
+  @Expose()
+  @Transform(({ obj }) => obj.hasOffers ?? false)
+  hasOffers?: boolean;
+
+  @ApiProperty({ description: 'Whether the current user has already submitted an offer for this booking', example: false })
+  @Expose()
+  @Transform(({ obj }) => obj.userHasSubmittedOffer ?? false)
+  userHasSubmittedOffer?: boolean;
 }
