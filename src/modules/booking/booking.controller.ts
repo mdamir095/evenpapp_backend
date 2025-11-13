@@ -159,6 +159,7 @@ export class BookingController {
     @Query('bookingType') bookingType?: 'venue' | 'vendor',
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
+    @Req() req?: any,
   ): Promise<BookingUserListResponseDto> {
     // Handle status parameter - support both string and array formats (same as /all endpoint)
     let statusFilter: string | string[] | undefined;
@@ -177,10 +178,12 @@ export class BookingController {
       }
     }
     
+    const authenticatedUserId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    
     console.log('Booking Controller - findAllForAdmin - status parameter:', status);
     console.log('Booking Controller - findAllForAdmin - statusFilter:', statusFilter);
     
-    const data = await this.bookingService.findAllForAdmin(page, limit, search, statusFilter, bookingType, dateFrom, dateTo)
+    const data = await this.bookingService.findAllForAdmin(page, limit, search, statusFilter, bookingType, dateFrom, dateTo, authenticatedUserId)
     
     return {
       bookings: data.bookings,
@@ -294,6 +297,7 @@ export class BookingController {
       bookingId: data.bookingId,
       userId: data.userId,
       userName: (data as any).userName,
+      offerAddedBy: (data as any).offerAddedBy,
       amount: data.amount,
       extraServices: data.extraServices,
       notes: data.notes,
@@ -342,6 +346,7 @@ export class BookingController {
         bookingId: offer.bookingId,
         userId: offer.userId,
         userName: (offer as any).userName,
+        offerAddedBy: (offer as any).offerAddedBy,
         amount: offer.amount,
         extraServices: extraServices,
         notes: offer.notes,
@@ -605,6 +610,7 @@ export class BookingController {
       bookingId: data.bookingId,
       vendor_id: data.vendorId,
       vendor_name: vendorName,
+      offerAddedBy: data.offerAddedBy,
       amount: data.offerAmount,
       extra_services: data.extraServices,
       status: data.status,
@@ -617,19 +623,19 @@ export class BookingController {
   @Post(':bookingId/accept-offer')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({
-    summary: 'Accept a vendor offer',
-    description: 'Allows booking owner to accept a vendor offer. This will mark the selected offer as accepted, reject others, update booking status, and initiate a chat session.'
+    summary: 'Accept or reject an offer',
+    description: 'Allows booking owner to accept or reject an offer. Accepting will mark the selected offer as accepted, reject others, update booking status to confirmed, and initiate a chat session. Rejecting will only mark the offer as rejected.'
   })
   @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
   @ApiBody({ type: AcceptOfferDto })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Offer accepted successfully',
+    description: 'Offer action completed successfully',
     type: AcceptOfferResponseDto
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
-    description: 'Cannot accept offer (not booking owner, offer not found, or offer already processed)'
+    description: 'Cannot process offer (not booking owner, offer not found, or offer already processed)'
   })
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
@@ -641,19 +647,29 @@ export class BookingController {
     @Req() req: any,
   ): Promise<AcceptOfferResponseDto> {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
-    const data = await this.bookingService.acceptOffer(bookingId, dto.offer_id, userId);
+    const data = await this.bookingService.acceptOrRejectOffer(bookingId, dto.offer_id, dto.action, userId);
     
+    // Handle different offer types (unified, vendor, admin)
+    const offer = data.offer;
+    const offerId = (offer as any).id || (offer as any)._id?.toString() || '';
+    const offerBookingId = offer.bookingId || (offer as any).bookingId;
+    const vendorId = offer.vendorId || offer.userId || (offer as any).vendorId || (offer as any).userId;
+    const amount = offer.offerAmount || offer.amount || 0;
+    const extraServices = offer.extraServices || offer.extra_services || [];
+    const status = offer.status;
+    const notes = offer.notes;
+
     return plainToInstance(AcceptOfferResponseDto, {
       offer: {
-        id: (data.offer as any).id || (data.offer as any)._id?.toString() || '',
-        bookingId: data.offer.bookingId,
-        vendor_id: data.offer.vendorId,
-        amount: data.offer.offerAmount,
-        extra_services: data.offer.extraServices,
-        status: data.offer.status,
-        notes: data.offer.notes,
-        createdAt: data.offer.createdAt,
-        updatedAt: data.offer.updatedAt,
+        id: offerId,
+        bookingId: offerBookingId,
+        vendor_id: vendorId,
+        amount: amount,
+        extra_services: extraServices,
+        status: status,
+        notes: notes,
+        createdAt: offer.createdAt,
+        updatedAt: offer.updatedAt,
       },
       chatId: data.chatId,
       bookingStatus: data.bookingStatus,

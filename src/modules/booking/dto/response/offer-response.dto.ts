@@ -18,6 +18,10 @@ export class OfferResponseDto {
   @Expose()
   userName?: string;
 
+  @ApiProperty({ description: 'User ID who added/submitted this offer', required: false })
+  @Expose()
+  offerAddedBy?: string;
+
   @ApiProperty({ description: 'Offer amount', example: 1500 })
   @Expose()
   amount: number;

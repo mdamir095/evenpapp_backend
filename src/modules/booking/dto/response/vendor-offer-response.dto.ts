@@ -33,6 +33,10 @@ export class VendorOfferResponseDto {
   @Expose()
   vendor_name?: string;
 
+  @ApiProperty({ description: 'User ID who added/submitted this offer', required: false })
+  @Expose()
+  offerAddedBy?: string;
+
   @ApiProperty({ description: 'Offer amount' })
   @Expose()
   amount: number;

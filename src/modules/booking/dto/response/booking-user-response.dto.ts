@@ -81,4 +81,14 @@ export class BookingUserResponseDto {
   @Expose()
   @Transform(({ obj }) => obj.userHasSubmittedOffer ?? false)
   userHasSubmittedOffer?: boolean;
+
+  @ApiProperty({ description: 'Status of the current user\'s offer (pending, accepted, rejected) or null if no offer submitted', example: 'pending', required: false })
+  @Expose()
+  @Transform(({ obj }) => obj.userOfferStatus ?? null)
+  userOfferStatus?: string | null;
+
+  @ApiProperty({ description: 'Simple offer status: "done" if user has submitted an offer, "no offer" otherwise', example: 'done', enum: ['done', 'no offer'] })
+  @Expose()
+  @Transform(({ obj }) => obj.offerStatus ?? (obj.userHasSubmittedOffer ? 'done' : 'no offer'))
+  offerStatus?: string;
 }

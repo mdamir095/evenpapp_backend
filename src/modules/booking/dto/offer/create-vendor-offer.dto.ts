@@ -49,5 +49,10 @@ export class CreateVendorOfferDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @ApiProperty({ description: 'User ID who is adding/submitting this offer', example: '6895e5aad5e5ed179ca8dafe', required: false })
+  @IsString()
+  @IsOptional()
+  offerAddedBy?: string;
 }
 

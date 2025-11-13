@@ -15,6 +15,9 @@ export class VendorOffer extends BaseModel {
   @Column()
   vendorId: string;
 
+  @Column({ type: 'string', nullable: true })
+  offerAddedBy?: string; // User ID who added/submitted the offer
+
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   offerAmount: number;
 

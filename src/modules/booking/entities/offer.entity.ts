@@ -27,6 +27,9 @@ export class Offer extends BaseModel {
   @Column()
   userId: string; // User/Vendor ID who submitted the offer
 
+  @Column({ nullable: true })
+  offerAddedBy?: string; // User ID who actually added/submitted the offer (may differ from userId)
+
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount: number;
 

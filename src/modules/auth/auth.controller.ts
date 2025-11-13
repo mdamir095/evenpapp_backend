@@ -20,7 +20,6 @@ import { SendPhoneOtpDto } from './dto/request/send-phone-otp.req.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { Roles } from '@common/decorators/permission.decorator';
 import { RoleType } from '@shared/enums/roleType';
-import { ResetPasswordMobileDto } from './dto/request/reset-password-mobile.req.dto';
 
 
 @ApiBearerAuth()
@@ -107,9 +106,9 @@ export class AuthController {
 
     @Post('reset-password')
     @HttpCode(200)
-    @ApiBody({ type: ResetPasswordMobileDto })
+    @ApiBody({ type: ResetPasswordDto })
     @ApiResponse({ status: 200, description: 'Password reset successful' })
-    async resetPassword(@Body() dto: ResetPasswordMobileDto) {
+    async resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
     }
 

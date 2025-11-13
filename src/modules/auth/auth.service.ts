@@ -54,8 +54,8 @@ export class AuthService {
       return this.userService.forgotPasswordMobile(email);   
     }
       
-    async resetPassword(dto: ResetPasswordMobileDto) {
-      return await this.userService.resetPasswordMobile(dto);
+    async resetPassword(dto: ResetPasswordDto) {
+      return await this.userService.resetPasswordWithToken(dto);
     }
 
     async googleLogin(token: string) {

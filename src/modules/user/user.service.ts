@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
   Res,
   UnauthorizedException,
@@ -1439,8 +1440,180 @@ export class UserService {
   }
 
   async forgotPasswordMobile(email: string) {
-    this.sendOtp(email);
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) {
+      // Don't reveal if user exists or not for security
+      return {
+        message: 'If an account with that email exists, a password reset link has been sent.',
+      };
+    }
+
+    // Generate reset token (JWT)
+    const token = jwt.sign({ userId: user.id.toString() }, this.jwtConfig.secret, {
+      expiresIn: '15m', // Token expires in 15 minutes
+      issuer: this.jwtConfig.jwtIssuer,
+    });
+
+    // Build reset URL
+    const resetUrl = `${this.generalConfig.frontendUrl}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+
+    // Create email content
+    const emailSubject = 'Reset Your Password';
+    const emailText = `
+Hello,
+
+You requested to reset your password. Please click the link below to reset your password:
+
+${resetUrl}
+
+This link will expire in 15 minutes.
+
+If you did not request this password reset, please ignore this email.
+
+Best regards,
+Event Booking Team
+    `.trim();
+
+    const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Your Password</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px;">
+    <h2 style="color: #333;">Reset Your Password</h2>
+    <p>Hello,</p>
+    <p>You requested to reset your password. Please click the button below to reset your password:</p>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${resetUrl}" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+    </div>
+    <p>Or copy and paste this link into your browser:</p>
+    <p style="word-break: break-all; color: #007bff;">${resetUrl}</p>
+    <p><strong>This link will expire in 15 minutes.</strong></p>
+    <p>If you did not request this password reset, please ignore this email.</p>
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+    <p style="color: #666; font-size: 12px;">Best regards,<br>Event Booking Team</p>
+  </div>
+</body>
+</html>
+    `.trim();
+
+    // Send email using SMTP (MailerService)
+    try {
+      console.log(`📧 Sending password reset email to ${user.email} via SMTP...`);
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: emailSubject,
+        text: emailText,
+        html: emailHtml,
+      });
+      console.log(`✅ Password reset email sent successfully to ${user.email} via SMTP`);
+    } catch (error) {
+      console.error('❌ SMTP email sending failed:', error.message);
+      console.error('Error details:', {
+        code: error.code,
+        command: error.command,
+        response: error.response,
+      });
+      // Log the reset link for manual access if email fails
+      console.log('='.repeat(60));
+      console.log('📧 PASSWORD RESET LINK (SMTP FAILED)');
+      console.log('='.repeat(60));
+      console.log(`To: ${user.email}`);
+      console.log(`Reset Link: ${resetUrl}`);
+      console.log(`Token: ${token}`);
+      console.log(`Expires: 15 minutes from now`);
+      console.log('='.repeat(60));
+      throw new InternalServerErrorException('Failed to send password reset email. Please try again later.');
+    }
+
+    return {
+      message: 'If an account with that email exists, a password reset link has been sent.',
+    };
   }
+  async resetPasswordWithToken(dto: ResetPasswordDto) {
+    try {
+      const { token, newPassword } = dto;
+
+      // Verify and decode the JWT token
+      let decoded: any;
+      try {
+        decoded = jwt.verify(token, this.jwtConfig.secret, {
+          issuer: this.jwtConfig.jwtIssuer,
+        });
+      } catch (error) {
+        if (error.name === 'TokenExpiredError') {
+          throw new BadRequestException('Password reset token has expired. Please request a new one.');
+        } else if (error.name === 'JsonWebTokenError') {
+          throw new BadRequestException('Invalid password reset token.');
+        } else {
+          throw new BadRequestException('Token verification failed.');
+        }
+      }
+
+      // Extract userId from token
+      const userId = decoded.userId;
+      if (!userId) {
+        throw new BadRequestException('Invalid token: userId not found in token.');
+      }
+
+      // Find user by ID
+      const user = await this.userRepository.findOne({ 
+        where: { _id: new ObjectId(userId) } as any 
+      } as any);
+      
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+      
+      // Hash and update password
+      user.password = await bcrypt.hash(newPassword, 10);
+      await this.userRepository.save(user);
+      
+      // Send confirmation email via SMTP
+      try {
+        console.log(`📧 Sending password reset confirmation email to ${user.email} via SMTP...`);
+        await this.mailerService.sendMail({
+          to: user.email,
+          subject: 'Password Reset Successful',
+          text: 'Your password has been reset successfully. If you did not make this change, please contact support immediately.',
+          html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Password Reset Successful</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px;">
+                <h2 style="color: #28a745;">Password Reset Successful</h2>
+                <p>Hello,</p>
+                <p>Your password has been reset successfully.</p>
+                <p>If you did not make this change, please contact support immediately.</p>
+                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+                <p style="color: #666; font-size: 12px;">Best regards,<br>Event Booking Team</p>
+              </div>
+            </body>
+            </html>
+          `,
+        });
+        console.log(`✅ Password reset confirmation email sent successfully to ${user.email} via SMTP`);
+      } catch (emailError) {
+        console.error('❌ Failed to send confirmation email:', emailError.message);
+        // Don't throw error, password reset is still successful
+      }
+      
+      return { message: 'Password reset successful' };
+    } catch (error) {
+      console.error('❌ Error in resetPasswordWithToken:', error);
+      throw error;
+    }
+  }
+
   async resetPasswordMobile(dto: ResetPasswordMobileDto) {
     try {
       const { email, newPassword } = dto;
