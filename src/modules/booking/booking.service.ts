@@ -2122,6 +2122,20 @@ export class BookingService {
       // Update hasOffers flag (offers still exist, just status changed)
       await this.updateBookingHasOffersFlag(actualBookingId);
 
+      // Ensure booking entity is saved/updated (refresh from database to get latest state)
+      try {
+        let updatedBooking = await this.bookingRepo.findOne({ where: { bookingId: actualBookingId } as any } as any);
+        if (updatedBooking) {
+          // Update the updatedAt timestamp by saving the booking
+          (updatedBooking as any).updatedAt = new Date();
+          await this.bookingRepo.save(updatedBooking);
+          console.log(`[INFO] Booking ${actualBookingId} updated after offer rejection`);
+        }
+      } catch (error) {
+        console.error('Error updating booking after offer rejection:', error);
+        // Don't fail the operation if booking update fails
+      }
+
       // Send notification
       try {
         const offerUserId = offer.userId || offer.vendorId || (offer as any).userId;
@@ -2725,18 +2739,21 @@ export class BookingService {
 
       const actualBookingId = (booking as any).bookingId || bookingId;
 
-      // Count offers from all collections
-      const unifiedOfferCount = await this.offerRepo.count({
+      // Count offers from all collections using find().length for better MongoDB compatibility
+      const unifiedOffers = await this.offerRepo.find({
         where: { bookingId: actualBookingId } as any,
       });
+      const unifiedOfferCount = unifiedOffers?.length || 0;
       
-      const vendorOfferCount = await this.vendorOfferRepo.count({
+      const vendorOffers = await this.vendorOfferRepo.find({
         where: { bookingId: actualBookingId } as any,
       });
+      const vendorOfferCount = vendorOffers?.length || 0;
       
-      const adminOfferCount = await this.adminOfferRepo.count({
+      const adminOffers = await this.adminOfferRepo.find({
         where: { bookingId: actualBookingId } as any,
       });
+      const adminOfferCount = adminOffers?.length || 0;
       
       const hasOffers = unifiedOfferCount > 0 || vendorOfferCount > 0 || adminOfferCount > 0;
 
