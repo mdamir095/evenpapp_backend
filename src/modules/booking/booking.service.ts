@@ -1995,29 +1995,89 @@ export class BookingService {
     let offerType: 'unified' | 'vendor' | 'admin' = 'vendor';
     let offerRepo: any = null;
     
-    // Try unified offers first
-    offer = await this.offerRepo.findOne({ where: { _id: new ObjectId(offerId) } as any } as any);
-    if (offer) {
-      offerType = 'unified';
-      offerRepo = this.offerRepo;
-    } else {
-      // Try vendor offers
-      offer = await this.vendorOfferRepo.findOne({ where: { _id: new ObjectId(offerId) } as any } as any);
-      if (offer) {
-        offerType = 'vendor';
-        offerRepo = this.vendorOfferRepo;
-      } else {
-        // Try admin offers
-        offer = await this.adminOfferRepo.findOne({ where: { _id: new ObjectId(offerId) } as any } as any);
+    // Helper function to match offer ID (handles different ID formats)
+    const matchesOfferId = (offerDoc: any, searchId: string): boolean => {
+      const docId = (offerDoc._id || offerDoc.id)?.toString();
+      const docOfferId = (offerDoc.offerId || (offerDoc as any).offerId)?.toString();
+      const searchIdStr = searchId.toString();
+      
+      return docId === searchIdStr || 
+             docOfferId === searchIdStr ||
+             docId === searchId ||
+             docOfferId === searchId;
+    };
+    
+    // First, get all offers for this booking from all collections
+    try {
+      const unifiedOffers = await this.offerRepo.find({ where: { bookingId: actualBookingId } as any } as any);
+      const vendorOffers = await this.vendorOfferRepo.find({ where: { bookingId: actualBookingId } as any } as any);
+      const adminOffers = await this.adminOfferRepo.find({ where: { bookingId: actualBookingId } as any } as any);
+      
+      console.log(`[DEBUG] Searching for offer ${offerId} in booking ${actualBookingId}`);
+      console.log(`[DEBUG] Found ${unifiedOffers?.length || 0} unified offers, ${vendorOffers?.length || 0} vendor offers, ${adminOffers?.length || 0} admin offers`);
+      
+      // Search in unified offers
+      if (unifiedOffers && unifiedOffers.length > 0) {
+        offer = unifiedOffers.find((o: any) => matchesOfferId(o, offerId));
+        if (offer) {
+          offerType = 'unified';
+          offerRepo = this.offerRepo;
+          console.log(`[DEBUG] Found offer ${offerId} in unified offers collection`);
+        }
+      }
+      
+      // Search in vendor offers if not found
+      if (!offer && vendorOffers && vendorOffers.length > 0) {
+        offer = vendorOffers.find((o: any) => matchesOfferId(o, offerId));
+        if (offer) {
+          offerType = 'vendor';
+          offerRepo = this.vendorOfferRepo;
+          console.log(`[DEBUG] Found offer ${offerId} in vendor offers collection`);
+        }
+      }
+      
+      // Search in admin offers if not found
+      if (!offer && adminOffers && adminOffers.length > 0) {
+        offer = adminOffers.find((o: any) => matchesOfferId(o, offerId));
         if (offer) {
           offerType = 'admin';
           offerRepo = this.adminOfferRepo;
+          console.log(`[DEBUG] Found offer ${offerId} in admin offers collection`);
         }
       }
-    }
-
-    if (!offer || !offerRepo) {
-      throw new NotFoundException('Offer not found');
+      
+      // If still not found, log all available offer IDs for debugging
+      if (!offer) {
+        console.error(`[ERROR] Offer ${offerId} not found in any collection for booking ${actualBookingId}`);
+        if (unifiedOffers?.length > 0) {
+          console.log(`[DEBUG] Unified offer IDs:`, unifiedOffers.map((o: any) => ({
+            _id: (o._id || o.id)?.toString(),
+            offerId: (o.offerId || (o as any).offerId)?.toString(),
+            bookingId: o.bookingId
+          })));
+        }
+        if (vendorOffers?.length > 0) {
+          console.log(`[DEBUG] Vendor offer IDs:`, vendorOffers.map((o: any) => ({
+            _id: (o._id || o.id)?.toString(),
+            offerId: (o.offerId || (o as any).offerId)?.toString(),
+            bookingId: o.bookingId
+          })));
+        }
+        if (adminOffers?.length > 0) {
+          console.log(`[DEBUG] Admin offer IDs:`, adminOffers.map((o: any) => ({
+            _id: (o._id || o.id)?.toString(),
+            offerId: (o.offerId || (o as any).offerId)?.toString(),
+            bookingId: o.bookingId
+          })));
+        }
+        throw new NotFoundException(`Offer ${offerId} not found for booking ${actualBookingId}. Please check the offer ID and ensure it belongs to this booking.`);
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      console.error(`Error searching for offers for booking ${actualBookingId}:`, error);
+      throw new NotFoundException(`Error searching for offer ${offerId} for booking ${actualBookingId}`);
     }
 
     // Verify offer belongs to this booking
@@ -2506,6 +2566,24 @@ export class BookingService {
       order: { createdAt: 'DESC' },
     });
 
+    // Helper function to extract ID from MongoDB document
+    const extractId = (doc: any): string => {
+      // Try _id first (MongoDB ObjectId)
+      if (doc._id) {
+        return doc._id.toString();
+      }
+      // Try id field
+      if (doc.id) {
+        return doc.id.toString();
+      }
+      // Try offerId field (for unified offers)
+      if (doc.offerId) {
+        return doc.offerId.toString();
+      }
+      // If none found, throw error (should not happen)
+      throw new Error(`Cannot extract ID from document: ${JSON.stringify(doc)}`);
+    };
+
     // Convert vendor offers to unified format
     const convertedVendorOffers = vendorOffers.map((vo: any) => {
       // Convert extraServices from object array to string array if needed
@@ -2518,7 +2596,7 @@ export class BookingService {
       }
 
       return {
-        offerId: (vo as any).id || (vo as any)._id?.toString() || `VO-${Date.now()}`,
+        offerId: extractId(vo), // Use consistent ID extraction
         bookingId: vo.bookingId,
         userId: vo.vendorId, // vendorId becomes userId in unified format
         offerAddedBy: vo.offerAddedBy, // Include offerAddedBy field
@@ -2541,7 +2619,7 @@ export class BookingService {
       }
 
       return {
-        offerId: (ao as any).id || (ao as any)._id?.toString() || `AO-${Date.now()}`,
+        offerId: extractId(ao), // Use consistent ID extraction
         bookingId: ao.bookingId,
         userId: ao.userId,
         amount: ao.offerAmount,
@@ -2555,9 +2633,11 @@ export class BookingService {
     });
 
     // Merge all offers and ensure offerAddedBy is set (use userId as fallback if not present)
+    // Also ensure offerId is consistently extracted for unified offers
     const allOffers = [
       ...unifiedOffers.map((o: any) => ({ 
-        ...o, 
+        ...o,
+        offerId: o.offerId || extractId(o), // Use offerId field if available, otherwise extract from _id
         _source: 'unified_offer',
         offerAddedBy: o.offerAddedBy || o.userId, // Ensure offerAddedBy is set
       })),
