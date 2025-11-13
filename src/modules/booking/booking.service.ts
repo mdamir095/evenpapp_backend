@@ -2086,17 +2086,33 @@ export class BookingService {
       throw new BadRequestException('Offer does not belong to this booking');
     }
 
-    // Verify offer is still pending
+    // Check current status
     const currentStatus = offer.status;
     const isPending = currentStatus === OfferStatus.PENDING || 
                      currentStatus === UnifiedOfferStatus.PENDING || 
                      currentStatus === AdminOfferStatus.PENDING;
-    if (!isPending) {
-      throw new BadRequestException(`Cannot ${action} an offer that is ${currentStatus}`);
-    }
+    const isRejected = currentStatus === OfferStatus.REJECTED || 
+                       currentStatus === UnifiedOfferStatus.REJECTED || 
+                       currentStatus === AdminOfferStatus.REJECTED;
+    const isAccepted = currentStatus === OfferStatus.ACCEPTED || 
+                       currentStatus === UnifiedOfferStatus.ACCEPTED || 
+                       currentStatus === AdminOfferStatus.ACCEPTED;
 
     // Handle REJECT action
     if (action === 'reject') {
+      // Allow rejecting if pending or already rejected (idempotent operation)
+      if (isAccepted) {
+        throw new BadRequestException('Cannot reject an offer that has already been accepted');
+      }
+      
+      // If already rejected, just return success (idempotent)
+      if (isRejected) {
+        console.log(`[INFO] Offer ${offerId} is already rejected, returning success (idempotent operation)`);
+        return {
+          offer: offer,
+          bookingStatus: (booking as any).bookingStatus || BookingStatus.PENDING,
+        };
+      }
       // Update offer status to rejected
       offer.status = offerType === 'unified' ? UnifiedOfferStatus.REJECTED : 
                      offerType === 'admin' ? AdminOfferStatus.REJECTED : 
@@ -2130,7 +2146,11 @@ export class BookingService {
       };
     }
 
-    // Handle ACCEPT action (continue with existing accept logic)
+    // Handle ACCEPT action
+    // Only allow accepting if the offer is pending
+    if (!isPending) {
+      throw new BadRequestException(`Cannot accept an offer that is ${currentStatus}. Only pending offers can be accepted.`);
+    }
 
     // Check if another offer was already accepted (check all collections)
     const acceptedUnifiedOffer = await this.offerRepo.findOne({
