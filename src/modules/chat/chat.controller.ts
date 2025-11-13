@@ -75,6 +75,34 @@ export class ChatController {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
     return await this.chatService.getMessages(userId, bookingId, page, limit);
   }
+
+  @Get(':bookingId/:vendorId')
+  @ApiOperation({ 
+    summary: 'Get chat session details for a booking and vendor',
+    description: 'Returns chat session details/messages post offer acceptance for a specific booking and vendor combination'
+  })
+  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
+  @ApiParam({ name: 'vendorId', description: 'Vendor ID', example: '507f1f77bcf86cd799439011' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number', example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page', example: 50 })
+  @ApiResponse({
+    status: 200,
+    description: 'Chat session details retrieved successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Chat session not found',
+  })
+  async getChatSession(
+    @Req() req: any,
+    @Param('bookingId') bookingId: string,
+    @Param('vendorId') vendorId: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 50,
+  ) {
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    return await this.chatService.getChatSession(userId, bookingId, vendorId, page, limit);
+  }
 }
 
 

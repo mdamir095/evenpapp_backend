@@ -12,11 +12,12 @@ export class ReplyMessageDto {
 
   @ApiProperty({
     example: 'BK-A9098A0F',
-    description: 'Booking ID this reply belongs to',
+    description: 'Booking ID this reply belongs to (optional)',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  bookingId: string;
+  @IsOptional()
+  bookingId?: string;
 
   @ApiProperty({
     example: 'admin456',

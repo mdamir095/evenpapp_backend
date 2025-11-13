@@ -15,8 +15,8 @@ export class Message {
   @Column()
   chatId: string; // Unique conversation/chat session ID
 
-  @Column()
-  bookingId: string; // Booking ID this chat belongs to
+  @Column({ nullable: true })
+  bookingId?: string; // Booking ID this chat belongs to (optional)
 
   @Column()
   message: string; // Message content

@@ -4,11 +4,12 @@ import { ApiProperty } from '@nestjs/swagger';
 export class CreateMessageDto {
   @ApiProperty({
     example: 'BK-A9098A0F',
-    description: 'Booking ID this message belongs to',
+    description: 'Booking ID this message belongs to (optional)',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  bookingId: string;
+  @IsOptional()
+  bookingId?: string;
 
   @ApiProperty({
     example: 'user123',

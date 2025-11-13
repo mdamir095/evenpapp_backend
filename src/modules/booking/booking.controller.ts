@@ -25,6 +25,7 @@ import {
 } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { plainToInstance } from 'class-transformer'
+import { ObjectId } from 'mongodb'
 import { BookingService } from './booking.service'
 import { BookingUserListResponseDto } from './dto/response/booking-user-list-response.dto'
 import { CreateRequestBookingDto } from './dto/request/create-request-booking.dto'
@@ -32,11 +33,19 @@ import { UpdateBookingDto } from './dto/request/update-booking.dto'
 import { CancelBookingDto } from './dto/request/cancel-booking.dto'
 import { AcceptBookingDto } from './dto/request/accept-booking.dto'
 import { RejectBookingDto } from './dto/request/reject-booking.dto'
+import { CreateVendorOfferDto } from './dto/offer/create-vendor-offer.dto'
+import { CreateAdminOfferDto } from './dto/offer/create-admin-offer.dto'
+import { CreateOfferDto } from './dto/offer/create-offer.dto'
+import { AcceptOfferDto } from './dto/offer/accept-offer.dto'
 import { RequestBookingResponseDto } from './dto/response/request-booking-response.dto'
 import { BookingDetailResponseDto } from './dto/response/booking-detail-response.dto'
 import { CancelBookingResponseDto } from './dto/response/cancel-booking-response.dto'
 import { AcceptBookingResponseDto } from './dto/response/accept-booking-response.dto'
 import { RejectBookingResponseDto } from './dto/response/reject-booking-response.dto'
+import { VendorOfferResponseDto, VendorOfferListResponseDto, AcceptOfferResponseDto } from './dto/response/vendor-offer-response.dto'
+import { AdminOfferResponseDto } from './dto/response/admin-offer-response.dto'
+import { OfferResponseDto } from './dto/response/offer-response.dto'
+import { BadRequestException } from '@nestjs/common'
 
 @ApiTags('Booking')
 @Controller('booking')
@@ -241,6 +250,106 @@ export class BookingController {
     return transformedResponse
   }
 
+  @Post(':bookingId/offers')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Add an offer to a booking',
+    description: 'Save a new offer (with offer amount and extra services) for a specific booking, linked to the user/vendor posting the offer'
+  })
+  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-7AA6B9CD' })
+  @ApiBody({ type: CreateOfferDto })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Offer created successfully',
+    type: OfferResponseDto
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Cannot submit offer (booking not found, or offer already submitted)'
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Booking not found'
+  })
+  async addOfferToBooking(
+    @Param('bookingId') bookingId: string,
+    @Body() dto: CreateOfferDto,
+    @Req() req: any,
+  ): Promise<OfferResponseDto> {
+    const authenticatedUserId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    
+    // Validate that the userId in the body matches the authenticated user (or user has permission)
+    if (dto.userId !== authenticatedUserId) {
+      // Allow if user is admin/enterprise admin, otherwise require match
+      const user = await this.bookingService['userService'].findById(authenticatedUserId);
+      if (!user || (!user.isEnterpriseAdmin && authenticatedUserId !== dto.userId)) {
+        throw new BadRequestException('userId must match the authenticated user or you must be an admin');
+      }
+    }
+    
+    const data = await this.bookingService.addOfferToBooking(bookingId, dto, authenticatedUserId);
+    
+    return plainToInstance(OfferResponseDto, {
+      offerId: data.offerId,
+      bookingId: data.bookingId,
+      userId: data.userId,
+      userName: (data as any).userName,
+      amount: data.amount,
+      extraServices: data.extraServices,
+      notes: data.notes,
+      createdAt: data.createdAt,
+    }, { excludeExtraneousValues: true });
+  }
+
+  @Get(':bookingId/offers')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'List all offers for a booking',
+    description: 'Return all offers made on this booking, including userId and offer details. Accessible to all authenticated users.'
+  })
+  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-7AA6B9CD' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'List of offers',
+    type: [OfferResponseDto]
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Booking not found'
+  })
+  async getBookingOffers(
+    @Param('bookingId') bookingId: string,
+    @Req() req: any,
+  ): Promise<OfferResponseDto[]> {
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    const offers = await this.bookingService.getAllOffersForBooking(bookingId, userId);
+    
+    return offers.map(offer => {
+      // Ensure extraServices is always a string array
+      let extraServices: string[] = [];
+      if (offer.extraServices) {
+        if (Array.isArray(offer.extraServices)) {
+          extraServices = offer.extraServices.map((es: any) => {
+            if (typeof es === 'string') return es;
+            if (typeof es === 'object' && es.name) return es.name;
+            return JSON.stringify(es);
+          });
+        }
+      }
+
+      return plainToInstance(OfferResponseDto, {
+        offerId: offer.offerId,
+        bookingId: offer.bookingId,
+        userId: offer.userId,
+        userName: (offer as any).userName,
+        amount: offer.amount,
+        extraServices: extraServices,
+        notes: offer.notes,
+        createdAt: offer.createdAt,
+      }, { excludeExtraneousValues: true });
+    });
+  }
+
   @Get(':bookingId')
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ summary: 'Get booking details by bookingId' })
@@ -262,7 +371,7 @@ export class BookingController {
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ 
     summary: 'Accept a booking',
-    description: 'Allows vendors/admins to accept a pending booking'
+    description: 'Allows admins/enterprises to accept a pending venue booking. Vendors cannot accept bookings - they must submit offers instead.'
   })
   @ApiBody({ type: AcceptBookingDto })
   @ApiResponse({ 
@@ -272,7 +381,7 @@ export class BookingController {
   })
   @ApiResponse({ 
     status: HttpStatus.BAD_REQUEST, 
-    description: 'Cannot accept booking (already confirmed, cancelled, completed, or rejected)' 
+    description: 'Cannot accept booking (already confirmed, cancelled, completed, rejected, or is a vendor booking)' 
   })
   @ApiResponse({ 
     status: HttpStatus.NOT_FOUND, 
@@ -285,6 +394,13 @@ export class BookingController {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub)
     console.log('Accept Booking Controller - User from JWT:', req?.user);
     console.log('Accept Booking Controller - Extracted userId:', userId, 'Type:', typeof userId);
+    
+    // Check if booking is a vendor booking - vendors cannot accept bookings directly
+    const booking = await this.bookingService.findByBookingId(dto.bookingId, userId);
+    if (booking && (booking as any).bookingType === 'vendor') {
+      throw new BadRequestException('Vendors cannot accept bookings directly. Please submit an offer instead using the /bookings/{bookingId}/vendor-offer endpoint.');
+    }
+    
     const data = await this.bookingService.acceptBooking(dto.bookingId, dto, userId)
     
     return plainToInstance(AcceptBookingResponseDto, {
@@ -300,7 +416,7 @@ export class BookingController {
   @UseGuards(AuthGuard('jwt'))
   @ApiOperation({ 
     summary: 'Reject a booking',
-    description: 'Allows vendors/admins to reject a pending booking with a reason'
+    description: 'Allows admins/enterprises to reject a pending venue booking. Vendors cannot reject bookings - they simply do not submit offers.'
   })
   @ApiBody({ type: RejectBookingDto })
   @ApiResponse({ 
@@ -310,7 +426,7 @@ export class BookingController {
   })
   @ApiResponse({ 
     status: HttpStatus.BAD_REQUEST, 
-    description: 'Cannot reject booking (already rejected, cancelled, completed, or confirmed)' 
+    description: 'Cannot reject booking (already rejected, cancelled, completed, confirmed, or is a vendor booking)' 
   })
   @ApiResponse({ 
     status: HttpStatus.NOT_FOUND, 
@@ -323,6 +439,13 @@ export class BookingController {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub)
     console.log('Reject Booking Controller - User from JWT:', req?.user);
     console.log('Reject Booking Controller - Extracted userId:', userId, 'Type:', typeof userId);
+    
+    // Check if booking is a vendor booking - vendors cannot reject bookings directly
+    const booking = await this.bookingService.findByBookingId(dto.bookingId, userId);
+    if (booking && (booking as any).bookingType === 'vendor') {
+      throw new BadRequestException('Vendors cannot reject bookings directly. Simply do not submit an offer if you are not interested.');
+    }
+    
     const data = await this.bookingService.rejectBooking(dto.bookingId, dto, userId)
     
     return plainToInstance(RejectBookingResponseDto, {
@@ -413,6 +536,170 @@ export class BookingController {
   })
   async migrateBookingStatus(): Promise<{ updated: number; message: string }> {
     return this.bookingService.migrateBookingStatus();
+  }
+
+  @Post(':bookingId/vendor-offer')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Submit a vendor offer for a booking',
+    description: 'Allows any user/vendor to submit an offer (amount + extra services) for any booking'
+  })
+  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
+  @ApiBody({ type: CreateVendorOfferDto })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Vendor offer submitted successfully',
+    type: VendorOfferResponseDto
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Cannot submit offer (booking not found, or offer already submitted)'
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Booking or vendor not found'
+  })
+  async submitVendorOffer(
+    @Param('bookingId') bookingId: string,
+    @Body() dto: CreateVendorOfferDto,
+    @Req() req: any,
+  ): Promise<VendorOfferResponseDto> {
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    const user = req?.user;
+    
+    // Get vendorId from user's enterprise context
+    // The vendor submitting the offer should be associated with the user's enterprise
+    const data = await this.bookingService.submitVendorOffer(bookingId, dto, userId, user);
+    
+    // Get vendor name
+    let vendorName = 'Unknown Vendor';
+    try {
+      // Try to find vendor first
+      const vendor = await this.bookingService['vendorRepo'].findOne({
+        where: { _id: new ObjectId(data.vendorId), isDeleted: false } as any,
+      } as any);
+      if (vendor) {
+        vendorName = vendor.name || vendor.title || 'Unknown Vendor';
+      } else {
+        // If vendor not found, try to get user name (vendorId might be userId)
+        const user = await this.bookingService['userService'].findById(data.vendorId);
+        if (user) {
+          vendorName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.organizationName || 'Unknown Vendor';
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching vendor name:', error);
+      // If ObjectId conversion fails, try to get user name
+      try {
+        const user = await this.bookingService['userService'].findById(data.vendorId);
+        if (user) {
+          vendorName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.organizationName || 'Unknown Vendor';
+        }
+      } catch (userError) {
+        console.error('Error fetching user name:', userError);
+      }
+    }
+
+    return plainToInstance(VendorOfferResponseDto, {
+      id: (data as any).id || (data as any)._id?.toString() || '',
+      bookingId: data.bookingId,
+      vendor_id: data.vendorId,
+      vendor_name: vendorName,
+      amount: data.offerAmount,
+      extra_services: data.extraServices,
+      status: data.status,
+      notes: data.notes,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+    }, { excludeExtraneousValues: true });
+  }
+
+  @Post(':bookingId/accept-offer')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Accept a vendor offer',
+    description: 'Allows booking owner to accept a vendor offer. This will mark the selected offer as accepted, reject others, update booking status, and initiate a chat session.'
+  })
+  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
+  @ApiBody({ type: AcceptOfferDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Offer accepted successfully',
+    type: AcceptOfferResponseDto
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Cannot accept offer (not booking owner, offer not found, or offer already processed)'
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Booking or offer not found'
+  })
+  async acceptOffer(
+    @Param('bookingId') bookingId: string,
+    @Body() dto: AcceptOfferDto,
+    @Req() req: any,
+  ): Promise<AcceptOfferResponseDto> {
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    const data = await this.bookingService.acceptOffer(bookingId, dto.offer_id, userId);
+    
+    return plainToInstance(AcceptOfferResponseDto, {
+      offer: {
+        id: (data.offer as any).id || (data.offer as any)._id?.toString() || '',
+        bookingId: data.offer.bookingId,
+        vendor_id: data.offer.vendorId,
+        amount: data.offer.offerAmount,
+        extra_services: data.offer.extraServices,
+        status: data.offer.status,
+        notes: data.offer.notes,
+        createdAt: data.offer.createdAt,
+        updatedAt: data.offer.updatedAt,
+      },
+      chatId: data.chatId,
+      bookingStatus: data.bookingStatus,
+    }, { excludeExtraneousValues: true });
+  }
+
+  @Post(':bookingId/admin-offer')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({
+    summary: 'Submit an admin/enterprise offer for a booking',
+    description: 'Allows admins/enterprises to submit an offer (amount + extra services) for a booking'
+  })
+  @ApiParam({ name: 'bookingId', description: 'Booking ID', example: 'BK-A9098A0F' })
+  @ApiBody({ type: CreateAdminOfferDto })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Admin offer submitted successfully',
+    type: AdminOfferResponseDto
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Cannot submit offer (booking not found, or offer already submitted)'
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Booking not found'
+  })
+  async submitAdminOffer(
+    @Param('bookingId') bookingId: string,
+    @Body() dto: CreateAdminOfferDto,
+    @Req() req: any,
+  ): Promise<AdminOfferResponseDto> {
+    const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub);
+    const data = await this.bookingService.submitAdminOffer(bookingId, dto, userId);
+    
+    return plainToInstance(AdminOfferResponseDto, {
+      id: (data as any).id || (data as any)._id?.toString() || '',
+      bookingId: data.bookingId,
+      user_id: data.userId,
+      offer_amount: data.offerAmount,
+      extra_services: data.extraServices,
+      status: data.status,
+      notes: data.notes,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+    }, { excludeExtraneousValues: true });
   }
 }
 
