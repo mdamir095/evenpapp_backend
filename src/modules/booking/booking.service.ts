@@ -2114,26 +2114,147 @@ export class BookingService {
         };
       }
       // Update offer status to rejected
-      offer.status = offerType === 'unified' ? UnifiedOfferStatus.REJECTED : 
-                     offerType === 'admin' ? AdminOfferStatus.REJECTED : 
-                     OfferStatus.REJECTED;
-      const updatedOffer = await offerRepo.save(offer);
+      const previousStatus = offer.status;
+      const rejectedStatus = offerType === 'unified' ? UnifiedOfferStatus.REJECTED : 
+                             offerType === 'admin' ? AdminOfferStatus.REJECTED : 
+                             OfferStatus.REJECTED;
+      
+      console.log(`[INFO] Updating offer ${offerId} status from ${previousStatus} to REJECTED (offerType: ${offerType})`);
+      
+      // Explicitly set the status property
+      offer.status = rejectedStatus;
+      
+      // For MongoDB/TypeORM, we need to ensure the status is properly set
+      // Use Object.assign to ensure all properties are updated
+      Object.assign(offer, {
+        status: rejectedStatus,
+        updatedAt: new Date(),
+      });
+      
+      // Save the offer with explicit status update
+      // Handle case where save() might return an array (MongoDB/TypeORM behavior)
+      let savedOfferResult;
+      try {
+        savedOfferResult = await offerRepo.save(offer);
+        const updatedOffer = Array.isArray(savedOfferResult) ? savedOfferResult[0] : savedOfferResult;
+        const savedStatus = updatedOffer?.status || (updatedOffer as any)?.status;
+        console.log(`[INFO] Offer ${offerId} saved via save(). Status: ${savedStatus}`);
+      } catch (saveError) {
+        console.error(`[ERROR] Failed to save offer using save() method:`, saveError);
+        // Try using update() method as fallback
+        try {
+          const updateResult = await offerRepo.update(
+            { _id: new ObjectId(offerId) } as any,
+            { status: rejectedStatus, updatedAt: new Date() } as any
+          );
+          console.log(`[INFO] Offer ${offerId} updated via update() method. Result:`, updateResult);
+        } catch (updateError) {
+          console.error(`[ERROR] Failed to update offer using update() method:`, updateError);
+          throw new BadRequestException(`Failed to update offer status: ${updateError.message}`);
+        }
+      }
+      
+      // Verify the offer was saved correctly by re-fetching from database
+      let verifyOffer = null;
+      try {
+        verifyOffer = await offerRepo.findOne({ where: { _id: new ObjectId(offerId) } as any } as any);
+        if (!verifyOffer) {
+          // Try alternative ID formats
+          verifyOffer = await offerRepo.findOne({ where: { _id: offerId } as any } as any);
+        }
+      } catch (verifyError) {
+        console.error(`[ERROR] Failed to verify offer:`, verifyError);
+      }
+      
+      if (verifyOffer) {
+        const verifyStatus = verifyOffer.status || (verifyOffer as any).status;
+        console.log(`[INFO] Offer ${offerId} verified from database. Status: ${verifyStatus}`);
+        if (verifyStatus !== rejectedStatus) {
+          console.error(`[ERROR] Offer status not updated in database! Expected: ${rejectedStatus}, Got: ${verifyStatus}`);
+          // Try to update again with explicit update() method
+          try {
+            await offerRepo.update({ _id: new ObjectId(offerId) } as any, { status: rejectedStatus } as any);
+            console.log(`[INFO] Attempted to update offer status using update() method as fallback`);
+            // Re-verify after update
+            const reVerifyOffer = await offerRepo.findOne({ where: { _id: new ObjectId(offerId) } as any } as any);
+            if (reVerifyOffer) {
+              const reVerifyStatus = reVerifyOffer.status || (reVerifyOffer as any).status;
+              console.log(`[INFO] Offer status after update() fallback: ${reVerifyStatus}`);
+            }
+          } catch (updateError) {
+            console.error(`[ERROR] Failed to update offer using update() method:`, updateError);
+          }
+        } else {
+          console.log(`[SUCCESS] Offer ${offerId} status successfully updated to REJECTED in database`);
+        }
+      } else {
+        console.error(`[ERROR] Could not verify offer ${offerId} from database after save`);
+      }
+      
+      // Use the verified offer if available, otherwise use saved result
+      const updatedOffer = verifyOffer || (Array.isArray(savedOfferResult) ? savedOfferResult[0] : savedOfferResult);
 
       // Update hasOffers flag (offers still exist, just status changed)
       await this.updateBookingHasOffersFlag(actualBookingId);
 
-      // Ensure booking entity is saved/updated (refresh from database to get latest state)
-      try {
-        let updatedBooking = await this.bookingRepo.findOne({ where: { bookingId: actualBookingId } as any } as any);
-        if (updatedBooking) {
-          // Update the updatedAt timestamp by saving the booking
-          (updatedBooking as any).updatedAt = new Date();
-          await this.bookingRepo.save(updatedBooking);
-          console.log(`[INFO] Booking ${actualBookingId} updated after offer rejection`);
+      // Check if all offers are now rejected - if so, update booking status to rejected
+      // Otherwise, keep booking status as pending
+      const allUnifiedOffers = await this.offerRepo.find({ where: { bookingId: actualBookingId } as any } as any);
+      const allVendorOffers = await this.vendorOfferRepo.find({ where: { bookingId: actualBookingId } as any } as any);
+      const allAdminOffers = await this.adminOfferRepo.find({ where: { bookingId: actualBookingId } as any } as any);
+      
+      const allOffers = [...allUnifiedOffers, ...allVendorOffers, ...allAdminOffers];
+      const hasPendingOffers = allOffers.some((o: any) => {
+        const status = o.status || (o as any).status;
+        return status === OfferStatus.PENDING || 
+               status === UnifiedOfferStatus.PENDING || 
+               status === AdminOfferStatus.PENDING;
+      });
+      const hasAcceptedOffers = allOffers.some((o: any) => {
+        const status = o.status || (o as any).status;
+        return status === OfferStatus.ACCEPTED || 
+               status === UnifiedOfferStatus.ACCEPTED || 
+               status === AdminOfferStatus.ACCEPTED;
+      });
+      
+      // Determine booking status:
+      // - If an offer is accepted, booking should be confirmed (but this shouldn't happen if we're rejecting)
+      // - If all offers are rejected and no pending offers, booking status should be rejected
+      // - Otherwise, keep as pending
+      let newBookingStatus = (booking as any).bookingStatus || BookingStatus.PENDING;
+      if (hasAcceptedOffers) {
+        newBookingStatus = BookingStatus.CONFIRMED;
+      } else if (!hasPendingOffers && allOffers.length > 0) {
+        // All offers are rejected, no pending offers
+        newBookingStatus = BookingStatus.REJECTED;
+        console.log(`[INFO] All offers rejected for booking ${actualBookingId}, updating booking status to REJECTED`);
+      } else {
+        // Still has pending offers, keep as pending
+        newBookingStatus = BookingStatus.PENDING;
+      }
+      
+      // Refresh booking from database to get latest state
+      let refreshedBooking = await this.bookingRepo.findOne({ where: { bookingId: actualBookingId } as any } as any);
+      if (!refreshedBooking && ObjectId.isValid(actualBookingId)) {
+        try {
+          const objectId = new ObjectId(actualBookingId);
+          refreshedBooking = await this.bookingRepo.findOne({ where: { _id: objectId } as any } as any);
+        } catch (error) {
+          console.log('Error searching by ObjectId:', error);
         }
-      } catch (error) {
-        console.error('Error updating booking after offer rejection:', error);
-        // Don't fail the operation if booking update fails
+      }
+
+      if (refreshedBooking) {
+        // Use Object.assign to ensure proper update (same approach as accept flow)
+        Object.assign(refreshedBooking, {
+          updatedAt: new Date(),
+          bookingStatus: newBookingStatus,
+        });
+        const savedBooking = await this.bookingRepo.save(refreshedBooking);
+        const finalBookingStatus = (savedBooking as any)?.bookingStatus || (Array.isArray(savedBooking) ? (savedBooking[0] as any)?.bookingStatus : newBookingStatus);
+        console.log(`[INFO] Booking ${actualBookingId} updated after offer rejection. Status: ${finalBookingStatus} (was: ${(booking as any).bookingStatus})`);
+      } else {
+        console.error(`[ERROR] Could not find booking ${actualBookingId} to update after offer rejection`);
       }
 
       // Send notification
@@ -2154,9 +2275,19 @@ export class BookingService {
         console.error('Error sending rejection notification:', error);
       }
 
+      // Get the final booking status from the saved booking
+      let finalBookingStatus = newBookingStatus;
+      if (refreshedBooking) {
+        // Re-fetch to get the latest status after save
+        const latestBooking = await this.bookingRepo.findOne({ where: { bookingId: actualBookingId } as any } as any);
+        if (latestBooking) {
+          finalBookingStatus = (latestBooking as any).bookingStatus || newBookingStatus;
+        }
+      }
+
       return {
         offer: updatedOffer,
-        bookingStatus: (booking as any).bookingStatus || BookingStatus.PENDING, // Keep booking status as pending
+        bookingStatus: finalBookingStatus, // Booking status: rejected if all offers rejected, otherwise pending
       };
     }
 
