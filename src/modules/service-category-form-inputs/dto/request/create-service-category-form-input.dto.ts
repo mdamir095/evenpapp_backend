@@ -12,15 +12,10 @@ export class CreateServiceCategoryFormInputDto {
   @IsNotEmpty()
   label: string;
 
-  @ApiProperty({ description: 'Field type (e.g., text, number, select, range)', example: 'number' })
-  @IsString()
-  @IsNotEmpty()
-  type: string;
-
-  @ApiProperty({ description: 'Whether this field is mandatory', required: false, example: false, default: false })
+  @ApiProperty({ description: 'Whether this form input is active', required: false, example: true, default: true })
   @IsBoolean()
   @IsOptional()
-  required?: boolean;
+  active?: boolean;
 
   @ApiProperty({ description: 'Minimum value for number/range fields', required: false, example: 1 })
   @IsNumber()

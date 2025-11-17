@@ -18,7 +18,21 @@ export class ServiceCategoryFormInputsController {
   @Post()
   @UseGuards(AuthGuard('jwt'), FeatureGuard)
   @Features(FeatureType.SERVICE_CATEGORY)
-  @ApiBody({ type: CreateServiceCategoryFormInputDto })
+  @ApiBody({
+    type: CreateServiceCategoryFormInputDto,
+    examples: {
+      default: {
+        summary: 'Create form input',
+        value: {
+          categoryId: '507f1f77bcf86cd799439011',
+          label: 'Number of Guests',
+          active: true,
+          minrange: 1,
+          maxrange: 5000,
+        },
+      },
+    },
+  })
   create(@Body() dto: CreateServiceCategoryFormInputDto) {
     return this.service.create(dto);
   }
@@ -40,7 +54,20 @@ export class ServiceCategoryFormInputsController {
   @Patch(':id')
   @UseGuards(AuthGuard('jwt'), FeatureGuard)
   @Features(FeatureType.SERVICE_CATEGORY)
-  @ApiBody({ type: UpdateServiceCategoryFormInputDto })
+  @ApiBody({
+    type: UpdateServiceCategoryFormInputDto,
+    examples: {
+      default: {
+        summary: 'Update form input',
+        value: {
+          label: 'Guests',
+          active: false,
+          minrange: 2,
+          maxrange: 4000,
+        },
+      },
+    },
+  })
   update(@Param('id') id: string, @Body() dto: UpdateServiceCategoryFormInputDto) {
     return this.service.update(id, dto);
   }

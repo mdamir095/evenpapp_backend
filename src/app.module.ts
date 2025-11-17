@@ -46,6 +46,7 @@ import { ServingStyleModule } from './modules/serving-style/serving-style.module
 import { AdditionalServiceModule } from './modules/additional-service/additional-service.module';
 import { SimilarModule } from './modules/similar/similar.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { ServiceCategoryFormInputsModule } from '@modules/service-category-form-inputs/service-category-form-inputs.module';
 
 @Module({
   imports: [
@@ -245,6 +246,7 @@ import { ChatModule } from './modules/chat/chat.module';
     FieldModule,
     FormModule,
     ServiceCategoryModule,
+    ServiceCategoryFormInputsModule,
     SimilarModule,
     VenueModule,
     VendorModule,

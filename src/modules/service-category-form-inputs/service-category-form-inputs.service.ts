@@ -16,7 +16,7 @@ export class ServiceCategoryFormInputsService {
   async create(dto: CreateServiceCategoryFormInputDto) {
     const entity = this.repo.create({
       ...dto,
-      required: dto.required ?? false,
+      active: dto.active ?? true,
     });
     return this.repo.save(entity);
   }
