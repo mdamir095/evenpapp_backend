@@ -10,11 +10,8 @@ export class ServiceCategoryFormInput extends BaseModel {
   @Column()
   label: string;
 
-  @Column()
-  type: string;
-
-  @Column({ default: false })
-  required: boolean;
+  @Column({ default: true })
+  active: boolean;
 
   @Column({ nullable: true })
   minrange?: number;
