@@ -7,6 +7,7 @@ import { UpdateServiceCategoryFormInputDto } from './dto/request/update-service-
 import { ObjectId } from 'mongodb';
 
 type FormInputResponse = {
+  id: string;
   categoryId: string;
   label: string;
   active: boolean;
@@ -61,6 +62,7 @@ export class ServiceCategoryFormInputsService {
 
   private toResponse(e: ServiceCategoryFormInput): FormInputResponse {
     const res: FormInputResponse = {
+      id: e.id?.toString?.() ?? String((e as any)._id ?? ''),
       categoryId: e.categoryId,
       label: e.label,
       active: e.active,
