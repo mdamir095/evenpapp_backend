@@ -225,6 +225,8 @@ export class VendorService {
           return { 
             ...vendor, 
             categoryName : category?.name,
+            // Ensure price is included from vendor data (original price from DB)
+            price: vendor.price || vendor.formData?.price || (vendor.formData?.fields?.Price ? parseFloat(vendor.formData.fields.Price) : undefined) || 0,
             location: {
               address: storedLocation?.address || vendor.formData?.address || vendor.formData?.location || 'Address not available',
               city: vendor.formData?.city || 'City not available',

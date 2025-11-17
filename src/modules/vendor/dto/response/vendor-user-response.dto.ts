@@ -65,7 +65,24 @@ export class VendorUserResponseDto {
 
   @ApiProperty({ description: 'Price of the vendor' })
   @Expose()
-  @Transform(({ obj }) => obj.price || 150.00)
+  @Transform(({ obj }) => {
+    // Return original price from database, or 0 if not available
+    // Check multiple possible price sources: direct price, formData.price, formData.fields.Price
+    if (obj.price !== undefined && obj.price !== null && obj.price > 0) {
+      return obj.price;
+    }
+    if (obj.formData?.price !== undefined && obj.formData?.price !== null && obj.formData.price > 0) {
+      return obj.formData.price;
+    }
+    if (obj.formData?.fields?.Price) {
+      const fieldsPrice = parseFloat(obj.formData.fields.Price);
+      if (!isNaN(fieldsPrice) && fieldsPrice > 0) {
+        return fieldsPrice;
+      }
+    }
+    // Return 0 if no price found
+    return 0;
+  })
   price: number;
 
   @ApiProperty({ 
