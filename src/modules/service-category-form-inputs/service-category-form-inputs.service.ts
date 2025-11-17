@@ -6,6 +6,14 @@ import { CreateServiceCategoryFormInputDto } from './dto/request/create-service-
 import { UpdateServiceCategoryFormInputDto } from './dto/request/update-service-category-form-input.dto';
 import { ObjectId } from 'mongodb';
 
+type FormInputResponse = {
+  categoryId: string;
+  label: string;
+  active: boolean;
+  minrange?: number;
+  maxrange?: number;
+};
+
 @Injectable()
 export class ServiceCategoryFormInputsService {
   constructor(
@@ -13,37 +21,52 @@ export class ServiceCategoryFormInputsService {
     private readonly repo: MongoRepository<ServiceCategoryFormInput>,
   ) {}
 
-  async create(dto: CreateServiceCategoryFormInputDto) {
+  async create(dto: CreateServiceCategoryFormInputDto): Promise<FormInputResponse> {
     const entity = this.repo.create({
       ...dto,
-      active: dto.active ?? true,
     });
-    return this.repo.save(entity);
+    const saved = await this.repo.save(entity);
+    return this.toResponse(saved);
   }
 
-  async findAll(categoryId?: string) {
-    const where = categoryId ? { categoryId } : {};
-    return this.repo.find({ where, order: { createdAt: 'DESC' } as any });
+  async findAll(categoryId?: string): Promise<FormInputResponse[]> {
+    const where = categoryId ? { categoryId } : {} as any;
+    const items = await this.repo.find({ where, order: { createdAt: 'DESC' } as any });
+    return items.map((e) => this.toResponse(e));
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<FormInputResponse> {
     if (!ObjectId.isValid(id)) {
       throw new NotFoundException(`Invalid form input id format: ${id}`);
     }
     const entity = await this.repo.findOneBy({ _id: new ObjectId(id) });
     if (!entity) throw new NotFoundException('Form input not found');
-    return entity;
+    return this.toResponse(entity);
   }
 
-  async update(id: string, dto: UpdateServiceCategoryFormInputDto) {
-    const entity = await this.findOne(id);
+  async update(id: string, dto: UpdateServiceCategoryFormInputDto): Promise<FormInputResponse> {
+    const entity = await this.repo.findOne({ where: { _id: new ObjectId(id) } as any });
+    if (!entity) throw new NotFoundException('Form input not found');
     Object.assign(entity, dto);
-    return this.repo.save(entity);
+    const saved = await this.repo.save(entity);
+    return this.toResponse(saved);
   }
 
   async remove(id: string) {
-    const entity = await this.findOne(id);
+    const entity = await this.repo.findOne({ where: { _id: new ObjectId(id) } as any });
+    if (!entity) throw new NotFoundException('Form input not found');
     await this.repo.remove(entity);
     return { success: true };
+  }
+
+  private toResponse(e: ServiceCategoryFormInput): FormInputResponse {
+    const res: FormInputResponse = {
+      categoryId: e.categoryId,
+      label: e.label,
+      active: e.active,
+    };
+    if (e.minrange !== undefined) res.minrange = e.minrange;
+    if (e.maxrange !== undefined) res.maxrange = e.maxrange;
+    return res;
   }
 }
