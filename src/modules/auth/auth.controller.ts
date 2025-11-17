@@ -106,10 +106,27 @@ export class AuthController {
 
     @Post('reset-password')
     @HttpCode(200)
-    @ApiBody({ type: ResetPasswordDto })
+    @ApiOperation({ 
+      summary: 'Reset user password',
+      description: 'Reset password using email address and new password. No token required.'
+    })
+    @ApiBody({ 
+      type: ResetPasswordDto,
+      examples: {
+        example1: {
+          value: {
+            email: 'amir@whiz-solutions.com',
+            newPassword: 'Test@1234'
+          },
+          description: 'Reset password with email and new password'
+        }
+      }
+    })
     @ApiResponse({ status: 200, description: 'Password reset successful' })
+    @ApiResponse({ status: 400, description: 'Bad Request - email and newPassword are required' })
+    @ApiResponse({ status: 404, description: 'User not found' })
     async resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto);
+      return this.authService.resetPassword(dto);
     }
 
     @Post('login/google')

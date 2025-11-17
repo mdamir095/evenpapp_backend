@@ -1006,51 +1006,10 @@ export class UserService {
       message: 'Reset password link sent to your email',
     };
   }
+  // This method is deprecated - use resetPasswordWithToken instead
+  // Keeping for backward compatibility but it now delegates to resetPasswordWithToken
   async resetPassword(dto: ResetPasswordDto) {
-    const { token, newPassword } = dto;
-
-    // 1. Verify token
-    let payload: any;
-    try {
-      payload = jwt.verify(token, this.jwtConfig.secret);
-    } catch (error) {
-      throw new BadRequestException('Invalid or expired token');
-    }
-
-    // 2. Find user by  email or token payload
-    if (!payload.userId) {
-      throw new BadRequestException('Invalid token payload');
-    }
-    const user = await this.userRepository.findOneBy({
-      _id: new ObjectId(payload.userId),
-    });
-    if (!user) throw new NotFoundException('User not found');
-
-    // 3. Update password
-    user.password = await bcrypt.hash(newPassword, 10);
-    await this.userRepository.save(user);
-    // 4. send confirmation email
-    const userName = user.firstName && user.lastName 
-      ? `${user.firstName} ${user.lastName}` 
-      : user.firstName || user.organizationName || 'User';
-    const emailHtml = generateEmailTemplate({
-      userName,
-      title: 'Password Reset Successful',
-      message: 'Your password has been reset successfully. You can now log in to your <strong>WhizCloud Event Dashboard</strong> account with your new password.',
-      additionalInfo: 'If you did not make this change, please contact support immediately.',
-    });
-    const emailText = generateEmailText({
-      userName,
-      message: 'Your password has been reset successfully. You can now log in to your WhizCloud Event Dashboard account with your new password.',
-      additionalInfo: 'If you did not make this change, please contact support immediately.',
-    });
-    await this.mailerService.sendMail({
-      to: user.email,
-      subject: 'Password Reset Successful - WhizCloud Events',
-      text: emailText,
-      html: emailHtml,
-    });
-    return { message: 'Password reset successful' };
+    return this.resetPasswordWithToken(dto);
   }
 
   async findOneWithRoles(id: any) {
@@ -1634,34 +1593,20 @@ WhizCloud Events Team
   }
   async resetPasswordWithToken(dto: ResetPasswordDto) {
     try {
-      const { token, newPassword } = dto;
+      const { email, newPassword } = dto;
 
-      // Verify and decode the JWT token
-      let decoded: any;
-      try {
-        decoded = jwt.verify(token, this.jwtConfig.secret, {
-          issuer: this.jwtConfig.jwtIssuer,
-        });
-      } catch (error) {
-        if (error.name === 'TokenExpiredError') {
-          throw new BadRequestException('Password reset token has expired. Please request a new one.');
-        } else if (error.name === 'JsonWebTokenError') {
-          throw new BadRequestException('Invalid password reset token.');
-        } else {
-          throw new BadRequestException('Token verification failed.');
-        }
-      }
-
-      // Extract userId from token
-      const userId = decoded.userId;
-      if (!userId) {
-        throw new BadRequestException('Invalid token: userId not found in token.');
-      }
-
-      // Find user by ID
-      const user = await this.userRepository.findOne({ 
-        where: { _id: new ObjectId(userId) } as any 
+      // Normalize email to lowercase
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Try to find user by email (case-insensitive)
+      let user = await this.userRepository.findOne({ 
+        where: { email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } } 
       } as any);
+      
+      // Fallback to exact match
+      if (!user) {
+        user = await this.userRepository.findOne({ where: { email: normalizedEmail } });
+      }
       
       if (!user) {
         throw new NotFoundException('User not found');
@@ -1710,30 +1655,69 @@ WhizCloud Events Team
   async resetPasswordMobile(dto: ResetPasswordMobileDto) {
     try {
       const { email, newPassword } = dto;
+      return await this.resetPasswordByEmail(email, newPassword);
+    } catch (error) {
+      console.error('❌ Error in resetPasswordMobile:', error);
+      throw error;
+    }
+  }
 
-      const user = await this.userRepository.findOne({ where: { email } });
-      if (!user) throw new NotFoundException('User not found');
+  async resetPasswordByEmail(email: string, newPassword: string) {
+    try {
+      // Normalize email to lowercase for consistent searching
+      const normalizedEmail = email.toLowerCase().trim();
       
+      // Try to find user by email (case-insensitive)
+      let user = await this.userRepository.findOne({ 
+        where: { email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } } 
+      } as any);
+      
+      // Fallback to exact match
+      if (!user) {
+        user = await this.userRepository.findOne({ where: { email: normalizedEmail } });
+      }
+      
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+      
+      // Update password
       user.password = await bcrypt.hash(newPassword, 10);
       await this.userRepository.save(user);
       
-      // Send confirmation email using robust email service
-      console.log(`📧 Sending password reset confirmation email to ${user.email} using robust email service...`);
-      const emailSent = await this.robustEmailService.sendEmail(
-        user.email,
-        'Password Reset Successful',
-        'Your password has been reset successfully.'
-      );
-
-      if (emailSent) {
-        console.log(`✅ Password reset confirmation email sent successfully to ${user.email}`);
-      } else {
-        console.log(`📝 Password reset confirmation email for ${user.email} (Email delivery failed, but password reset is complete)`);
+      // Send confirmation email using email template
+      const userName = user.firstName && user.lastName 
+        ? `${user.firstName} ${user.lastName}` 
+        : user.firstName || user.organizationName || 'User';
+      const emailHtml = generateEmailTemplate({
+        userName,
+        title: 'Password Reset Successful',
+        message: 'Your password has been reset successfully. You can now log in to your <strong>WhizCloud Event Dashboard</strong> account with your new password.',
+        additionalInfo: 'If you did not make this change, please contact support immediately.',
+      });
+      const emailText = generateEmailText({
+        userName,
+        message: 'Your password has been reset successfully. You can now log in to your WhizCloud Event Dashboard account with your new password.',
+        additionalInfo: 'If you did not make this change, please contact support immediately.',
+      });
+      
+      try {
+        console.log(`📧 Sending password reset confirmation email to ${user.email} via SMTP...`);
+        await this.mailerService.sendMail({
+          to: user.email,
+          subject: 'Password Reset Successful - WhizCloud Events',
+          text: emailText,
+          html: emailHtml,
+        });
+        console.log(`✅ Password reset confirmation email sent successfully to ${user.email} via SMTP`);
+      } catch (emailError) {
+        console.error('❌ Failed to send confirmation email:', emailError.message);
+        // Don't throw error, password reset is still successful
       }
       
       return { message: 'Password reset successful' };
     } catch (error) {
-      console.error('❌ Error in resetPasswordMobile:', error);
+      console.error('❌ Error in resetPasswordByEmail:', error);
       throw error;
     }
   }
