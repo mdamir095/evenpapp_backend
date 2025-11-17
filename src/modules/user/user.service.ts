@@ -35,6 +35,7 @@ import fs from 'fs';
 import { SupabaseService } from '@shared/modules/supabase/supabase.service';
 import { SimpleEmailService } from '@shared/email/simple-email.service';
 import { RobustEmailService } from '@shared/email/robust-email.service';
+import { generateEmailTemplate, generateEmailText } from '@shared/email/email-template.helper';
 @Injectable()
 export class UserService {
   private generalConfig;
@@ -106,10 +107,23 @@ export class UserService {
     
     try {
       console.log(`Attempting to send OTP email to ${body.email}...`);
+      const userName = body.firstName || body.organizationName || 'User';
+      const emailHtml = generateEmailTemplate({
+        userName,
+        title: 'Your OTP Code',
+        message: `Welcome to <strong>WhizCloud Event Dashboard</strong>! Your OTP code for account verification is: <strong>${otp}</strong>`,
+        additionalInfo: 'This OTP will expire in 5 minutes. Please use it to verify your account.',
+      });
+      const emailText = generateEmailText({
+        userName,
+        message: `Welcome to WhizCloud Event Dashboard! Your OTP code for account verification is: ${otp}`,
+        additionalInfo: 'This OTP will expire in 5 minutes. Please use it to verify your account.',
+      });
       await this.mailerService.sendMail({
         to: body.email,
-        subject: 'Your OTP Code',
-        text: `Your OTP is ${otp}`,
+        subject: 'Your OTP Code - WhizCloud Events',
+        text: emailText,
+        html: emailHtml,
       });
       console.log(`✅ Signup OTP sent successfully to ${body.email}: ${otp}`);
     } catch (error) {
@@ -143,63 +157,63 @@ export class UserService {
     const { email, password } = payload;
     console.log(`Login attempt for: ${email}`);
     
-    // Debug: Check database connection and collection
-    try {
-      const userCount = await this.userRepository.count();
-      console.log(`Total users in database: ${userCount}`);
-      
-      // Try to find any user first
-      const anyUser = await this.userRepository.findOne({});
-      console.log(`Any user found: ${!!anyUser}`);
-      if (anyUser) {
-        console.log(`Sample user email: ${anyUser.email}`);
-      }
-    } catch (error) {
-      console.log(`Database query error: ${error.message}`);
+    // Normalize email to lowercase for consistent searching
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Try case-insensitive email search first (most reliable for MongoDB)
+    let user = await this.userRepository.findOne({ 
+      where: { email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } } 
+    } as any);
+    
+    // Fallback to exact match if regex doesn't work
+    if (!user) {
+      user = await this.userRepository.findOne({ where: { email: normalizedEmail } });
     }
     
-    // Try different query approaches
-    console.log(`Searching for email: "${email}"`);
-    
-    // Method 1: Standard query
-    let user = await this.userRepository.findOne({ where: { email: email } });
-    console.log(`Method 1 - User found: ${!!user}`);
-    
+    // Final fallback: exact match with original email
     if (!user) {
-      // Method 2: Case insensitive search
-      user = await this.userRepository.findOne({ where: { email: { $regex: new RegExp(`^${email}$`, 'i') } } });
-      console.log(`Method 2 - Case insensitive search: ${!!user}`);
+      user = await this.userRepository.findOne({ where: { email: email } });
     }
     
     if (!user) {
-      // Method 3: Find all users and filter
-      const allUsers = await this.userRepository.find({});
-      console.log(`Method 3 - All users count: ${allUsers.length}`);
-      allUsers.forEach((u, index) => {
-        console.log(`User ${index + 1}: email="${u.email}", match=${u.email === email}`);
-      });
-      user = allUsers.find(u => u.email === email) || null;
-      console.log(`Method 3 - Found user: ${!!user}`);
-    }
-    
-    console.log(`Final user found: ${!!user}`);
-    
-    if (user) {
-      let match = await bcrypt.compare(password, user.password);
-      console.log(`Password match: ${match}`);
-      console.log(`User status - isBlocked: ${user.isBlocked}, isMobileAppUser: ${user.isMobileAppUser}, isActive: ${user.isActive}`);
-      
-      if (match && !user.isBlocked && (user.isMobileAppUser || (user.isActive && !user.isMobileAppUser))) {
-        console.log('Login successful');
-        return user;
-      } else {
-        console.log('Login failed - conditions not met');
-        throw new UnauthorizedException('Invalid credentials');
-      }
-    } else {
-      console.log('User not found');
+      console.log(`User not found for email: ${email}`);
       throw new UnauthorizedException('Invalid credentials');
     }
+    
+    console.log(`User found: ${user.email}, isBlocked: ${user.isBlocked}, isActive: ${user.isActive}, isMobileAppUser: ${user.isMobileAppUser}`);
+    
+    // Check if user is blocked
+    if (user.isBlocked) {
+      console.log(`User ${user.email} is blocked`);
+      throw new UnauthorizedException('Your account has been blocked. Please contact support.');
+    }
+    
+    // Verify password
+    if (!user.password) {
+      console.log(`User ${user.email} has no password set`);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    console.log(`Password match: ${passwordMatch}`);
+    
+    if (!passwordMatch) {
+      console.log(`Password mismatch for user: ${user.email}`);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+    
+    // Check user status - allow login if:
+    // 1. User is a mobile app user, OR
+    // 2. User is active (for non-mobile users)
+    const canLogin = user.isMobileAppUser || (user.isActive && !user.isMobileAppUser);
+    
+    if (!canLogin) {
+      console.log(`User ${user.email} cannot login - isActive: ${user.isActive}, isMobileAppUser: ${user.isMobileAppUser}`);
+      throw new UnauthorizedException('Your account is not active. Please contact support.');
+    }
+    
+    console.log(`Login successful for user: ${user.email}`);
+    return user;
   }
 
   async signinJwt(result: any) {
@@ -1016,10 +1030,25 @@ export class UserService {
     user.password = await bcrypt.hash(newPassword, 10);
     await this.userRepository.save(user);
     // 4. send confirmation email
+    const userName = user.firstName && user.lastName 
+      ? `${user.firstName} ${user.lastName}` 
+      : user.firstName || user.organizationName || 'User';
+    const emailHtml = generateEmailTemplate({
+      userName,
+      title: 'Password Reset Successful',
+      message: 'Your password has been reset successfully. You can now log in to your <strong>WhizCloud Event Dashboard</strong> account with your new password.',
+      additionalInfo: 'If you did not make this change, please contact support immediately.',
+    });
+    const emailText = generateEmailText({
+      userName,
+      message: 'Your password has been reset successfully. You can now log in to your WhizCloud Event Dashboard account with your new password.',
+      additionalInfo: 'If you did not make this change, please contact support immediately.',
+    });
     await this.mailerService.sendMail({
       to: user.email,
-      subject: 'Password Reset Successful',
-      text: 'Your password has been reset successfully.',
+      subject: 'Password Reset Successful - WhizCloud Events',
+      text: emailText,
+      html: emailHtml,
     });
     return { message: 'Password reset successful' };
   }
@@ -1457,47 +1486,116 @@ export class UserService {
     // Build reset URL
     const resetUrl = `${this.generalConfig.frontendUrl}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 
-    // Create email content
-    const emailSubject = 'Reset Your Password';
-    const emailText = `
-Hello,
+    // Get user's name for personalization
+    const userFullName = user.firstName && user.lastName 
+      ? `${user.firstName} ${user.lastName}` 
+      : user.firstName || user.organizationName || 'User';
 
-You requested to reset your password. Please click the link below to reset your password:
+    // Create email content
+    const emailSubject = 'Reset Your Password - WhizCloud Events';
+    const emailText = `
+Hi ${userFullName},
+
+You requested to reset your password for your WhizCloud Event Dashboard account. Click the link below to reset it:
 
 ${resetUrl}
 
 This link will expire in 15 minutes.
 
-If you did not request this password reset, please ignore this email.
+If you didn't request this email, you can safely ignore it.
 
 Best regards,
-Event Booking Team
+WhizCloud Events Team
     `.trim();
 
     const emailHtml = `
-<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reset Your Password</title>
-</head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px;">
-    <h2 style="color: #333;">Reset Your Password</h2>
-    <p>Hello,</p>
-    <p>You requested to reset your password. Please click the button below to reset your password:</p>
-    <div style="text-align: center; margin: 30px 0;">
-      <a href="${resetUrl}" style="background-color: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
-    </div>
-    <p>Or copy and paste this link into your browser:</p>
-    <p style="word-break: break-all; color: #007bff;">${resetUrl}</p>
-    <p><strong>This link will expire in 15 minutes.</strong></p>
-    <p>If you did not request this password reset, please ignore this email.</p>
-    <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-    <p style="color: #666; font-size: 12px;">Best regards,<br>Event Booking Team</p>
-  </div>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Email Template</title>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+    <table
+      width="100%"
+      border="0"
+      cellspacing="0"
+      cellpadding="0"
+      bgcolor="#f4f4f4"
+    >
+      <tr>
+        <td align="center" style="padding: 20px 0;">
+          <!-- Main Container -->
+          <table
+            width="600"
+            border="0"
+            cellspacing="0"
+            cellpadding="0"
+            style="background-color: #ffffff; border-radius: 8px; overflow: hidden;"
+          >
+            <!-- Header -->
+            <tr>
+              <td
+                align="center"
+                bgcolor="#007BFF"
+                style="padding: 20px; color: #ffffff; font-family: Arial, sans-serif;"
+              >
+                <h2 style="margin: 0; font-size: 24px;">WhizCloud Events</h2>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td
+                style="padding: 30px; font-family: Arial, sans-serif; color: #333333; font-size: 16px; line-height: 1.6;"
+              >
+                <p>Hi ${userFullName},</p>
+                <p>
+                  You requested to reset your password for your <strong>WhizCloud Event Dashboard</strong> account.
+                </p>
+                <p>
+                  Click the button below to reset your password:
+                </p>
+                <p style="text-align: center; margin: 30px 0;">
+                  <a
+                    href="${resetUrl}"
+                    style="
+                      background-color: #007bff;
+                      color: #ffffff;
+                      padding: 12px 24px;
+                      text-decoration: none;
+                      border-radius: 4px;
+                      display: inline-block;
+                      font-weight: bold;
+                    "
+                    >Reset Password</a
+                  >
+                </p>
+                <p style="font-size: 14px; color: #666;">
+                  Or copy and paste this link into your browser:<br>
+                  <span style="word-break: break-all; color: #007bff;">${resetUrl}</span>
+                </p>
+                <p style="font-size: 14px; color: #666;">
+                  <strong>This link will expire in 15 minutes.</strong>
+                </p>
+                <p>
+                  If you didn't request this email, you can safely ignore it.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td
+                bgcolor="#f1f1f1"
+                style="padding: 20px; text-align: center; font-family: Arial, sans-serif; font-size: 14px; color: #666666;"
+              >
+                © 2025 WhizCloud. All rights reserved.<br />
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
 </html>
     `.trim();
 
@@ -1576,30 +1674,25 @@ Event Booking Team
       // Send confirmation email via SMTP
       try {
         console.log(`📧 Sending password reset confirmation email to ${user.email} via SMTP...`);
+        const userName = user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}` 
+          : user.firstName || user.organizationName || 'User';
+        const emailHtml = generateEmailTemplate({
+          userName,
+          title: 'Password Reset Successful',
+          message: 'Your password has been reset successfully. You can now log in to your <strong>WhizCloud Event Dashboard</strong> account with your new password.',
+          additionalInfo: 'If you did not make this change, please contact support immediately.',
+        });
+        const emailText = generateEmailText({
+          userName,
+          message: 'Your password has been reset successfully. You can now log in to your WhizCloud Event Dashboard account with your new password.',
+          additionalInfo: 'If you did not make this change, please contact support immediately.',
+        });
         await this.mailerService.sendMail({
           to: user.email,
-          subject: 'Password Reset Successful',
-          text: 'Your password has been reset successfully. If you did not make this change, please contact support immediately.',
-          html: `
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Password Reset Successful</title>
-            </head>
-            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="background-color: #f4f4f4; padding: 20px; border-radius: 5px;">
-                <h2 style="color: #28a745;">Password Reset Successful</h2>
-                <p>Hello,</p>
-                <p>Your password has been reset successfully.</p>
-                <p>If you did not make this change, please contact support immediately.</p>
-                <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-                <p style="color: #666; font-size: 12px;">Best regards,<br>Event Booking Team</p>
-              </div>
-            </body>
-            </html>
-          `,
+          subject: 'Password Reset Successful - WhizCloud Events',
+          text: emailText,
+          html: emailHtml,
         });
         console.log(`✅ Password reset confirmation email sent successfully to ${user.email} via SMTP`);
       } catch (emailError) {

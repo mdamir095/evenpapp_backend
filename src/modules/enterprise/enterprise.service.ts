@@ -25,6 +25,7 @@ import { UpdateEnterpriseUserStatusDto } from './dto/request/update-enterprise-u
 import { Feature } from '../feature/entities/feature.entity';
 import { RoleType } from '@shared/enums/roleType';
 import { RobustEmailService } from '@shared/email/robust-email.service';
+import { generateEmailTemplate, generateEmailText } from '@shared/email/email-template.helper';
 
 @Injectable()
 export class EnterpriseService {
@@ -86,35 +87,27 @@ export class EnterpriseService {
     });
     const frontendUrl = this.configService.get('general.frontendUrl');
     const resetUrl = `${frontendUrl}/enterprise-management/reset-password?token=${token}`;
+    const userName = dto.firstName || 'User';
+    const emailHtml = generateEmailTemplate({
+      userName,
+      title: 'Reset Your Password',
+      message: 'We received a request to reset your password for your <strong>WhizCloud Event Dashboard</strong> account. Click the button below to set a new password:',
+      buttonText: 'Reset Password',
+      buttonUrl: resetUrl,
+      additionalInfo: 'This link will expire in 15 minutes.',
+    });
+    const emailText = generateEmailText({
+      userName,
+      message: 'We received a request to reset your password for your WhizCloud Event Dashboard account. Click the link below to set a new password:',
+      buttonText: 'Reset Password',
+      buttonUrl: resetUrl,
+      additionalInfo: 'This link will expire in 15 minutes.',
+    });
     await this.mailerService.sendMail({
       to: dto.email,
-      subject: 'Reset Your Password',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f6f6f6;">
-          <div style="max-width: 600px; margin: auto; background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
-            <h2 style="color: #333;">Reset Your Password 🔒</h2>
-            <p style="font-size: 16px; color: #555;">
-              Hi there,
-            </p>
-            <p style="font-size: 16px; color: #555;">
-              We received a request to reset your password. Click the button below to set a new password:
-            </p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetUrl}" 
-                 style="display: inline-block; padding: 12px 25px; font-size: 16px; color: #fff; background-color: #dc3545; border-radius: 5px; text-decoration: none;">
-                Reset Password
-              </a>
-            </div>
-            <p style="font-size: 14px; color: #888;">
-              If you didn’t request a password reset, you can safely ignore this email.
-            </p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-            <p style="font-size: 12px; color: #aaa;">
-              This email was sent to you from our secure platform. If you have any questions, contact us at support@example.com.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: 'Reset Your Password - WhizCloud Events',
+      text: emailText,
+      html: emailHtml,
     });    
     return plainToInstance(EnterpriseResponseDto, enterpriseCreated, { excludeExtraneousValues: true });
   }
@@ -480,28 +473,27 @@ export class EnterpriseService {
     // Send reset password email instead of welcome with temporary password
     const frontendUrl = this.configService.get('general.frontendUrl');
     const resetUrl = `${frontendUrl}/enterprise-management/reset-password?token=${token}`;
+    const userName = dto.firstName || dto.organizationName || 'User';
+    const emailHtml = generateEmailTemplate({
+      userName,
+      title: `Welcome to ${enterprise.enterpriseName}`,
+      message: `Your account has been created for <strong>${enterprise.enterpriseName}</strong>. Click the button below to set your password and activate your account:`,
+      buttonText: 'Set Password',
+      buttonUrl: resetUrl,
+      additionalInfo: 'This link will expire in 15 minutes.',
+    });
+    const emailText = generateEmailText({
+      userName,
+      message: `Your account has been created for ${enterprise.enterpriseName}. Click the link below to set your password and activate your account:`,
+      buttonText: 'Set Password',
+      buttonUrl: resetUrl,
+      additionalInfo: 'This link will expire in 15 minutes.',
+    });
     await this.mailerService.sendMail({
       to: dto.email,
-      subject: 'Reset Your Password',
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f6f6f6;">
-          <div style="max-width: 600px; margin: auto; background-color: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.05);">
-            <h2 style="color: #333;">Welcome to ${enterprise.enterpriseName}</h2>
-            <p style="font-size: 16px; color: #555;">
-              Your account has been created. Click the button below to set your password and activate your account:
-            </p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetUrl}" 
-                 style="display: inline-block; padding: 12px 25px; font-size: 16px; color: #fff; background-color: #dc3545; border-radius: 5px; text-decoration: none;">
-                Set Password
-              </a>
-            </div>
-            <p style="font-size: 14px; color: #888;">
-              If you didn’t request this, you can ignore this email.
-            </p>
-          </div>
-        </div>
-      `,
+      subject: `Welcome to ${enterprise.enterpriseName} - WhizCloud Events`,
+      text: emailText,
+      html: emailHtml,
     });
 
     return {
@@ -610,10 +602,23 @@ export class EnterpriseService {
         roleIds: [role.id],
       }
       await this.userService.updateEnterpriseUser(userId, userObj as any);
+      const userName = target.firstName || target.organizationName || 'User';
+      const emailHtml = generateEmailTemplate({
+        userName,
+        title: 'Password Reset',
+        message: `Your password has been reset. Your new temporary password is: <strong>${dto.password}</strong>. Please log in and change your password immediately.`,
+        additionalInfo: 'For security reasons, please change your password after logging in.',
+      });
+      const emailText = generateEmailText({
+        userName,
+        message: `Your password has been reset. Your new temporary password is: ${dto.password}. Please log in and change your password immediately.`,
+        additionalInfo: 'For security reasons, please change your password after logging in.',
+      });
       await this.mailerService.sendMail({
         to: target.email,
-        subject: 'Password Reset',
-        text: `Your password has been reset. Your new password is: ${dto.password}. Please login and change your password.`,
+        subject: 'Password Reset - WhizCloud Events',
+        text: emailText,
+        html: emailHtml,
       });
     }
 
