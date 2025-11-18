@@ -25,7 +25,7 @@ export enum ServiceCategoryFormLabel {
   MenuPreferences = 'Menu Preferences',
 }
 export const SERVICE_CATEGORY_FORM_LABEL_GROUPS: Record<string, ServiceCategoryFormLabel[]> = {
-  photography: [
+  photographer: [
     ServiceCategoryFormLabel.EventType,
     ServiceCategoryFormLabel.EventDate,
     ServiceCategoryFormLabel.EndDate,
