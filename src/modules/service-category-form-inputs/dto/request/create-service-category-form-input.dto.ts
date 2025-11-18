@@ -24,6 +24,39 @@ export enum ServiceCategoryFormLabel {
   SpecialInstructions = 'Special Instructions',
   MenuPreferences = 'Menu Preferences',
 }
+export const SERVICE_CATEGORY_FORM_LABEL_GROUPS: Record<string, ServiceCategoryFormLabel[]> = {
+  photography: [
+    ServiceCategoryFormLabel.EventType,
+    ServiceCategoryFormLabel.EventDate,
+    ServiceCategoryFormLabel.EndDate,
+    ServiceCategoryFormLabel.StartTime,
+    ServiceCategoryFormLabel.EndTime,
+    ServiceCategoryFormLabel.ExpectedGuests,
+    ServiceCategoryFormLabel.VenueAddress,
+    ServiceCategoryFormLabel.PhotographerTypes,
+    ServiceCategoryFormLabel.DurationOfCoverage,
+    ServiceCategoryFormLabel.NumbersOfPhotographers,
+    ServiceCategoryFormLabel.BudgetRange,
+    ServiceCategoryFormLabel.SpecialRequirements,
+    ServiceCategoryFormLabel.ReferenceIdeas,
+  ],
+  catering: [
+    ServiceCategoryFormLabel.EventType,
+    ServiceCategoryFormLabel.EventDate,
+    ServiceCategoryFormLabel.EndDate,
+    ServiceCategoryFormLabel.StartTime,
+    ServiceCategoryFormLabel.EndTime,
+    ServiceCategoryFormLabel.ExpectedGuests,
+    ServiceCategoryFormLabel.VenueAddress,
+    ServiceCategoryFormLabel.MealType,
+    ServiceCategoryFormLabel.CuisinePreferences,
+    ServiceCategoryFormLabel.ServingStyle,
+    ServiceCategoryFormLabel.AdditionalServices,
+    ServiceCategoryFormLabel.SpecialInstructions,
+    ServiceCategoryFormLabel.MenuPreferences,
+  ],
+};
+
 export const SERVICE_CATEGORY_FORM_LABELS: string[] = Object.values(ServiceCategoryFormLabel);
 
 export class CreateServiceCategoryFormInputDto {

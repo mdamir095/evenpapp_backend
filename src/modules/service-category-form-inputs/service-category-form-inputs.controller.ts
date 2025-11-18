@@ -2,7 +2,7 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Us
 import { ServiceCategoryFormInputsService } from './service-category-form-inputs.service';
 import { CreateServiceCategoryFormInputDto } from './dto/request/create-service-category-form-input.dto';
 import { UpdateServiceCategoryFormInputDto } from './dto/request/update-service-category-form-input.dto';
-import { SERVICE_CATEGORY_FORM_LABELS } from './dto/request/create-service-category-form-input.dto';
+import { SERVICE_CATEGORY_FORM_LABELS, SERVICE_CATEGORY_FORM_LABEL_GROUPS } from './dto/request/create-service-category-form-input.dto';
 import { ApiBearerAuth, ApiTags, ApiQuery, ApiBody, ApiOkResponse } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { FeatureGuard } from '@common/guards/features.guard';
@@ -48,9 +48,25 @@ export class ServiceCategoryFormInputsController {
   @Get('label')
   @UseGuards(AuthGuard('jwt'), FeatureGuard)
   @Features(FeatureType.SERVICE_CATEGORY)
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: 'Optional category identifier to filter labels (e.g., event, catering)',
+    enum: Object.keys(SERVICE_CATEGORY_FORM_LABEL_GROUPS),
+  })
   @ApiOkResponse({ description: 'Dropdown labels', schema: { type: 'array', items: { type: 'string', enum: SERVICE_CATEGORY_FORM_LABELS } } })
-  getLabelOptions() {
-    return SERVICE_CATEGORY_FORM_LABELS;
+  getLabelOptions(@Query('category') category?: string) {
+    if (!category) {
+      return SERVICE_CATEGORY_FORM_LABELS;
+    }
+
+    const key = category.toLowerCase();
+    const group = SERVICE_CATEGORY_FORM_LABEL_GROUPS[key];
+    if (!group) {
+      return SERVICE_CATEGORY_FORM_LABELS;
+    }
+
+    return group;
   }
 
   @Get(':id')
