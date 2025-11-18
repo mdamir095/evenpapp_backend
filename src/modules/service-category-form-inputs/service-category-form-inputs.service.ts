@@ -82,7 +82,7 @@ export class ServiceCategoryFormInputsService {
     const res: FormInputResponse = {
       id: e.id?.toString?.() ?? String((e as any)._id ?? ''),
       categoryId: e.categoryId,
-      label: fromDbLabel(e.label),
+      label: e.label,
       active: e.active,
     };
     if (e.minrange !== undefined) res.minrange = e.minrange;
