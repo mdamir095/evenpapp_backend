@@ -15,6 +15,17 @@ type FormInputResponse = {
   maxrange?: number;
 };
 
+function toDbLabel(label: string): string {
+  return label.replace(/\s+/g, '_');
+}
+
+function fromDbLabel(label: string): string {
+  if (label.includes('_')) {
+    return label.replace(/_/g, ' ');
+  }
+  return label;
+}
+
 @Injectable()
 export class ServiceCategoryFormInputsService {
   constructor(
@@ -25,6 +36,7 @@ export class ServiceCategoryFormInputsService {
   async create(dto: CreateServiceCategoryFormInputDto): Promise<FormInputResponse> {
     const entity = this.repo.create({
       ...dto,
+      label: toDbLabel(dto.label),
     });
     const saved = await this.repo.save(entity);
     return this.toResponse(saved);
@@ -48,7 +60,13 @@ export class ServiceCategoryFormInputsService {
   async update(id: string, dto: UpdateServiceCategoryFormInputDto): Promise<FormInputResponse> {
     const entity = await this.repo.findOne({ where: { _id: new ObjectId(id) } as any });
     if (!entity) throw new NotFoundException('Form input not found');
-    Object.assign(entity, dto);
+
+    const updated: UpdateServiceCategoryFormInputDto = { ...dto };
+    if (updated.label !== undefined) {
+      updated.label = toDbLabel(updated.label as unknown as string) as any;
+    }
+
+    Object.assign(entity, updated);
     const saved = await this.repo.save(entity);
     return this.toResponse(saved);
   }
@@ -64,7 +82,7 @@ export class ServiceCategoryFormInputsService {
     const res: FormInputResponse = {
       id: e.id?.toString?.() ?? String((e as any)._id ?? ''),
       categoryId: e.categoryId,
-      label: e.label,
+      label: fromDbLabel(e.label),
       active: e.active,
     };
     if (e.minrange !== undefined) res.minrange = e.minrange;
