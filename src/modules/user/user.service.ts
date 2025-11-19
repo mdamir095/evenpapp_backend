@@ -378,11 +378,34 @@ export class UserService {
   }
 
   async createWithPhone(dto: SendPhoneOtpDto) {
-    const user = this.userRepository.create({
-      countryCode: dto.countryCode,
-      phoneNumber: dto.phoneNumber,
-    });
-    return this.userRepository.save(user);
+    try {
+      // Generate a unique email based on phone number
+      const tempEmail = `phone_${dto.countryCode}_${dto.phoneNumber}@temp.user`;
+      
+      const user = this.userRepository.create({
+        countryCode: dto.countryCode,
+        phoneNumber: dto.phoneNumber,
+        firstName: 'User', // Default first name
+        lastName: 'Phone', // Default last name
+        email: tempEmail.toLowerCase(), // Temporary unique email
+        organizationName: 'N/A', // Default organization name
+        password: '', // Empty password for phone-based users
+        isActive: true,
+        isEmailVerified: false,
+        isPhoneVerified: false,
+        isBlocked: false,
+        isEnterpriseAdmin: false, // Default value
+        roleIds: [], // Will be set by auth service
+        address: '', // Default empty address
+        city: '', // Default empty city
+        state: '', // Default empty state
+        pincode: '', // Default empty pincode
+      });
+      return this.userRepository.save(user);
+    } catch (error: any) {
+      console.error('Error in createWithPhone:', error);
+      throw error;
+    }
   }
 
   async findById(id: string) {
