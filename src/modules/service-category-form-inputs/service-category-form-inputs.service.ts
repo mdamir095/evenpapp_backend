@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MongoRepository } from 'typeorm';
 import { ServiceCategoryFormInput } from './entity/service-category-form-input.entity';
@@ -34,9 +34,18 @@ export class ServiceCategoryFormInputsService {
   ) {}
 
   async create(dto: CreateServiceCategoryFormInputDto): Promise<FormInputResponse> {
+    const dbLabel = toDbLabel(dto.label);
+
+    const existing = await this.repo.findOne({
+      where: { categoryId: dto.categoryId, label: dbLabel } as any,
+    });
+    if (existing) {
+      throw new BadRequestException('This label is already added for the selected category');
+    }
+
     const entity = this.repo.create({
       ...dto,
-      label: toDbLabel(dto.label),
+      label: dbLabel,
     });
     const saved = await this.repo.save(entity);
     return this.toResponse(saved);
