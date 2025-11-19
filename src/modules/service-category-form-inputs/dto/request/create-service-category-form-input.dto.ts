@@ -48,6 +48,7 @@ export const SERVICE_CATEGORY_FORM_LABEL_GROUPS: Record<string, ServiceCategoryF
     ServiceCategoryFormLabel.EndTime,
     ServiceCategoryFormLabel.ExpectedGuests,
     ServiceCategoryFormLabel.VenueAddress,
+    ServiceCategoryFormLabel.BudgetRange,
     ServiceCategoryFormLabel.MealType,
     ServiceCategoryFormLabel.CuisinePreferences,
     ServiceCategoryFormLabel.ServingStyle,
