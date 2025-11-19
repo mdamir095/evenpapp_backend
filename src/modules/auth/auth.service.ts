@@ -181,61 +181,61 @@ export class AuthService {
     //     return this.signinJwt(user);
     // }
     async sendPhoneOtp(dto: SendPhoneOtpDto) {
-        // TODO: Hardcoded OTP until email functionality is working - change back to random generation
-        const otp = '111111'; // Math.floor(100000 + Math.random() * 900000).toString();
-        const expireAt = new Date(Date.now() + 5 * 60 * 1000);
+        // Fixed OTP for bypass - always use 111111
+        const otp = '111111';
+        // Set expiry far in the future to avoid expiry issues
+        const expireAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year from now
     
-        let user = await this.userService.findByPhoneNumber(dto.countryCode,dto.phoneNumber);
+        let user = await this.userService.findByPhoneNumber(dto.countryCode, dto.phoneNumber);
        
         if(user) {
           // If user exists, update OTP and expiry
           user.otp = otp;
           user.expireAt = expireAt;
           await this.userService.save(user);
-        }else{
+        } else {
           user = await this.userService.createWithPhone(dto);
           user.otp = otp;
           user.expireAt = expireAt;
           user.isPhoneVerified = false; // Initially not verified
-            let defaultRole = await this.roleService.findByName(RoleType.USER);
-                   if(!defaultRole) {
-                      let userFeature = await this.featureService.findByName(FeatureType.USER)
-                      if(!userFeature) {
-                          userFeature = await this.featureService.create({
-                              name: FeatureType.USER,
-                              isActive: true
-                        });
-                      }
-                      // Create the 'User' role with the 'user' feature
-                      defaultRole = await this.roleService.save({
-                          name: RoleType.USER,
-                          featureIds: [new ObjectId(userFeature.id)],
-                      });
-                  } 
+          let defaultRole = await this.roleService.findByName(RoleType.USER);
+          if(!defaultRole) {
+            let userFeature = await this.featureService.findByName(FeatureType.USER)
+            if(!userFeature) {
+              userFeature = await this.featureService.create({
+                name: FeatureType.USER,
+                isActive: true
+              });
+            }
+            // Create the 'User' role with the 'user' feature
+            defaultRole = await this.roleService.save({
+              name: RoleType.USER,
+              featureIds: [new ObjectId(userFeature.id)],
+            });
+          } 
           await this.userService.save(user);
         }
-        return { message: 'OTP sent to phone' };
+        return { message: 'OTP sent to phone', otp: '111111' }; // Return OTP for testing
       }
-    async verifyPhoneOtp(dto:VerifyPhoneOtpDto) {
+    async verifyPhoneOtp(dto: VerifyPhoneOtpDto) {
         // Find user by phone number
-
-        const user = await this.userService.findByPhoneNumber(dto.countryCode,dto.phoneNumber);
-        if (!user) throw new BadRequestException('User not found');
-      
-        // Check OTP and expiry
-        if ((user.otp !== dto.otp && dto.otp !== '111111') || !user.expireAt || user.expireAt < new Date()) {
-          throw new BadRequestException('Invalid or expired OTP');
+        const user = await this.userService.findByPhoneNumber(dto.countryCode, dto.phoneNumber);
+        if (!user) {
+          throw new BadRequestException('User not found');
         }
       
+        // Bypass OTP verification - always accept any OTP (especially '111111')
+        // No validation checks - completely bypassed
+        // OTP verification is disabled for testing/development
+        
         // Mark phone as verified
         user.isPhoneVerified = true;
         user.otp = '';
         user.expireAt = null;
         await this.userService.save(user);
       
-        // Optionally, return JWT and user info for login
-         return this.signinJwt(user);
-        // return { message: 'Phone OTP verified' };
+        // Return JWT and user info for login
+        return this.signinJwt(user);
       }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
