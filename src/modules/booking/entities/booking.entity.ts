@@ -4,7 +4,12 @@ import { BookingStatus } from '@shared/enums/bookingStatus';
 import { BookingType } from '@shared/enums/bookingType';
 import { BeforeInsert } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
-
+export enum TimeSlot {
+  MORNING = 'Morning',
+  AFTERNOON = 'Afternoon',
+  EVENING = 'Evening',
+  NIGHT = 'Night',
+}
 @Entity('bookings')
 export class Booking extends BaseModel {
   @Column({ unique: true })

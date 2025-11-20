@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Expose, Transform, Type } from 'class-transformer';
-
+import { TimeSlot } from '../../entities/booking.entity';
 class LocationDto {
   @ApiProperty({ description: 'Full address' })
   @Expose()
@@ -51,6 +51,11 @@ export class BookingUserResponseDto {
   @Expose()
   @Transform(({ obj }) => obj.paymentDetails?.amount || obj.venue?.price || 0)
   price: number;
+
+  @ApiProperty({ description: 'Time slot of the booking', enum: TimeSlot, required: false })
+  @Expose()
+  @Transform(({ obj }) => obj.timeSlot)
+  timeSlot?: TimeSlot;
 
   @ApiProperty({ description: 'Average rating of the venue' })
   @Expose()

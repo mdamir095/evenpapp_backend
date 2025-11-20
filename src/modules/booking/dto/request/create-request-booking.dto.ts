@@ -10,6 +10,7 @@ import {
   IsEnum,
 } from 'class-validator';
 import { BookingType } from '@shared/enums/bookingType';
+import { TimeSlot } from '../../entities/booking.entity';
 
 export class CreateRequestBookingDto {
   @ApiProperty({ enum: BookingType, enumName: 'BookingType' })
@@ -45,6 +46,11 @@ export class CreateRequestBookingDto {
   @IsString()
   @IsNotEmpty()
   endTime: string;
+
+  @ApiProperty({ required: false, enum: TimeSlot, enumName: 'TimeSlot' })
+  @IsOptional()
+  @IsEnum(TimeSlot)
+  timeSlot?: TimeSlot;
 
   @ApiProperty({ required: false })
   @IsOptional()
