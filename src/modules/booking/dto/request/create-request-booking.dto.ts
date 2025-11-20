@@ -18,8 +18,6 @@ export class CreateRequestBookingDto {
   bookingType: BookingType;
 
   @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
   eventHall: string;
 
   @ApiProperty({ required: false })
