@@ -115,7 +115,19 @@ export class VendorController {
   })
   async findAllForUser(@Query() paginationDto: VendorPaginationDto): Promise<VendorUserPaginatedResponseDto> {
     const { data, pagination } = await this.vendorService.findAll(paginationDto);
-    return { data: plainToInstance(VendorUserResponseDto, data, { excludeExtraneousValues: true }), pagination };
+    const transformedData = plainToInstance(VendorUserResponseDto, data, { excludeExtraneousValues: true });
+    
+    // Explicitly ensure categoryId and categoryName are present after transformation
+    const finalData = transformedData.map((vendorDto: any, index: number) => {
+      const originalVendor = data[index];
+      if (originalVendor) {
+        vendorDto.categoryId = originalVendor.categoryId;
+        vendorDto.categoryName = originalVendor.categoryName;
+      }
+      return vendorDto;
+    });
+    
+    return { data: finalData, pagination };
   }
 
   @Get('user/category/:categoryId')

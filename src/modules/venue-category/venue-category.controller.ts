@@ -1,14 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { CreateVenueCategoryDto } from './dto/request/create-venue-category.dto';
 import { VenueCategoryService } from './venue-category.service';
 import { UpdateVenueCategoryDto } from './dto/request/update-venue-category.dto';
 import { VenueCategoryResponseDto } from './dto/response/venue-category.dto';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { IPagination } from '../../common/interfaces/pagination.interface';
 import { UpdateVenueCategoryStatusDto } from './dto/request/update-venue-category-status.dto';
+import { AuthGuard } from '@nestjs/passport';
 
 @ApiTags('Venue Categories')
 @Controller('venue-category')
+@ApiBearerAuth()
 export class VenueCategoryController {
     constructor(private readonly venueCategoryService: VenueCategoryService) {}
 
@@ -53,7 +55,8 @@ export class VenueCategoryController {
     }
 
      @Get('user')
-      @ApiOperation({ summary: 'Get all venue categories' })
+     @UseGuards(AuthGuard('jwt'))
+      @ApiOperation({ summary: 'Get all venue categories filtered by venue-category form type' })
       @ApiQuery({ name: 'page', type: Number, required: true, description: 'Page number' })
       @ApiQuery({ name: 'limit', type: Number, required: true, description: 'Limit number' })
       @ApiQuery({ name: 'search', type: String, required: false, description: 'Search string' })
@@ -64,6 +67,8 @@ export class VenueCategoryController {
     }
 
     @Get('user/:id')
+    @UseGuards(AuthGuard('jwt'))
+    @ApiOperation({ summary: 'Get venue category by ID filtered by venue-category form type' })
     findOneForUser(@Param('id') id: string) {
         return this.venueCategoryService.findOne(id);
     }

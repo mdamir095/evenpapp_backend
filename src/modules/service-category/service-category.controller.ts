@@ -32,8 +32,9 @@ export class ServiceCategoryController {
 
     @Get('user/:id')
      @UseGuards(AuthGuard('jwt'))
-    findOneForUser(@Param('id') id: string): Promise<ServiceCategoryResponseDto> {
-        return this.serviceCategoryService.findOne(id);
+     @ApiQuery({ name: 'type', type: String, required: false, description: 'Filter by type: vendor or venue', enum: ['vendor', 'venue'] })
+    findOneForUser(@Param('id') id: string, @Query('type') type?: string): Promise<ServiceCategoryResponseDto> {
+        return this.serviceCategoryService.findOne(id, type);
     }
 
     @Post()

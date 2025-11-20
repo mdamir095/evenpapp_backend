@@ -155,5 +155,15 @@ export class VendorDetailResponseDto {
   @ApiProperty({ description: 'Category name' })
   @Expose()
   category_name: string;
+
+  @ApiProperty({ description: 'Category ID (camelCase)' })
+  @Expose()
+  @Transform(({ obj }) => obj.category_id || obj.categoryId || '')
+  categoryId: string;
+
+  @ApiProperty({ description: 'Category name (camelCase)' })
+  @Expose()
+  @Transform(({ obj }) => obj.category_name || obj.categoryName || '')
+  categoryName: string;
 }
 

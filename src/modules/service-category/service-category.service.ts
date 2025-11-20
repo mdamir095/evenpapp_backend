@@ -147,10 +147,10 @@ export class ServiceCategoryService {
             preserveNullAndEmptyArrays: false
           }
         },
-        // Filter to only include categories with forms of type 'vendor-service'
+        // Filter to only include categories with forms of type 'vendor-service' or 'venue-category'
         {
           $match: {
-            'formData.type': 'vendor-service'
+            'formData.type': { $in: ['vendor-service', 'venue-category'] }
           }
         },
         // Sort by createdAt descending
@@ -261,12 +261,20 @@ export class ServiceCategoryService {
 
   }
 
-  async findOne(id: string): Promise<ServiceCategoryResponseDto> {
+  async findOne(id: string, type?: string): Promise<ServiceCategoryResponseDto> {
     if (!ObjectId.isValid(id)) {
       throw new NotFoundException(`Invalid service category id format: ${id}`);
     }
 
-    // Use aggregation to join category with forms and filter by form type 'vendor-service'
+    // Determine form types to filter based on type parameter
+    let formTypes: string[] = ['vendor-service', 'venue-category'];
+    if (type === 'vendor') {
+      formTypes = ['vendor-service'];
+    } else if (type === 'venue') {
+      formTypes = ['venue-category'];
+    }
+
+    // Use aggregation to join category with forms and filter by form type
     const results = await this.repo
       .aggregate([
         { $match: { _id: new ObjectId(id) } },
@@ -295,10 +303,10 @@ export class ServiceCategoryService {
             preserveNullAndEmptyArrays: false 
           } 
         },
-        // Filter to only include categories with forms of type 'vendor-service'
+        // Filter to only include categories with forms of the specified type(s)
         {
           $match: {
-            'formData.type': 'vendor-service'
+            'formData.type': { $in: formTypes }
           }
         },
         {
@@ -311,7 +319,27 @@ export class ServiceCategoryService {
 
     if (!results.length) {
       // Check if category exists but form type is wrong
-      const serviceCategory = await this.repo.findOneBy({ _id: new ObjectId(id) });
+      let serviceCategory = null;
+      try {
+        serviceCategory = await this.repo.findOneBy({ _id: new ObjectId(id) });
+      } catch (error) {
+        // Try alternative query methods
+        try {
+          serviceCategory = await this.repo.findOne({
+            where: { _id: new ObjectId(id) }
+          });
+        } catch (err) {
+          // Try with id field
+          try {
+            serviceCategory = await this.repo.findOne({
+              where: { id: id }
+            });
+          } catch (e) {
+            // Category doesn't exist
+          }
+        }
+      }
+
       if (!serviceCategory) {
         throw new NotFoundException(`Service category not found with id: ${id}`);
       }
@@ -326,12 +354,20 @@ export class ServiceCategoryService {
         if (!form) {
           throw new NotFoundException(`Form with ID ${serviceCategory.formId} not found in forms table`);
         }
-        if (form.type !== 'vendor-service') {
-          throw new NotFoundException(`Service category is linked to a form with type '${form.type}'. Only categories with forms of type 'vendor-service' are allowed.`);
+        
+        // Provide specific error message based on type parameter
+        if (type === 'vendor' && form.type !== 'vendor-service') {
+          throw new NotFoundException(`Service category is linked to a form with type '${form.type}'. Only categories with forms of type 'vendor-service' are allowed when type=vendor.`);
+        } else if (type === 'venue' && form.type !== 'venue-category') {
+          throw new NotFoundException(`Service category is linked to a form with type '${form.type}'. Only categories with forms of type 'venue-category' are allowed when type=venue.`);
+        } else if (form.type !== 'vendor-service' && form.type !== 'venue-category') {
+          throw new NotFoundException(`Service category is linked to a form with type '${form.type}'. Only categories with forms of type 'vendor-service' or 'venue-category' are allowed.`);
         }
       }
       
-      throw new NotFoundException('Service category not found or does not have a valid vendor-service form');
+      // If we get here, the category exists but doesn't match the type filter
+      const expectedTypes = type === 'vendor' ? 'vendor-service' : type === 'venue' ? 'venue-category' : 'vendor-service or venue-category';
+      throw new NotFoundException(`Service category not found or does not have a valid ${expectedTypes} form`);
     }
 
     const categoryResult = results[0];

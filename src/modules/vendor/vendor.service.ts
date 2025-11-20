@@ -7,6 +7,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { Vendor } from './entity/vendor.entity';
 import { VendorCategory } from '../vendor-category/entity/vendor-category.entity';
+import { ServiceCategory } from '../service-category/entity/service-category.entity';
 import { Form } from '../form/entity/form.entity';
 import { CreateVendorDto } from './dto/request/create-vendor.dto';
 import { UpdateVendorDto } from './dto/request/update-vendor.dto';
@@ -27,7 +28,8 @@ export class VendorService {
     @InjectRepository(Vendor, 'mongo') private readonly vendorRepo: MongoRepository<Vendor>,
     @InjectRepository(Rating, 'mongo') private readonly ratingRepo: MongoRepository<Rating>, // Injected
     @InjectRepository(User, 'mongo') private readonly userRepo: MongoRepository<User>,
-    @InjectRepository(VendorCategory, 'mongo') private readonly categoryRepo: MongoRepository<VendorCategory>,
+    @InjectRepository(VendorCategory, 'mongo') private readonly vendorCategoryRepo: MongoRepository<VendorCategory>,
+    @InjectRepository(ServiceCategory, 'mongo') private readonly serviceCategoryRepo: MongoRepository<ServiceCategory>,
     @InjectRepository(Form, 'mongo') private readonly formRepo: MongoRepository<Form>,
     private readonly locationService: LocationService,
   ) {}
@@ -75,7 +77,7 @@ export class VendorService {
       let categoryName = 'General Service';
       if (createDto.categoryId && ObjectId.isValid(createDto.categoryId)) {
         try {
-          const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(createDto.categoryId) });
+          const category = await this.serviceCategoryRepo.findOneBy({ _id: new ObjectId(createDto.categoryId) });
           if (category && !category.isDeleted) {
             categoryName = category.name;
           }
@@ -217,16 +219,81 @@ export class VendorService {
 
       const populatedVendors = await Promise.all(
         vendors.map(async (vendor) => {
-          const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(vendor.categoryId) });
           const storedLocation = await this.locationService.findByServiceId(vendor.id?.toString());
           
+          // Get category name from categories collection (ServiceCategory) based on categoryId
+          // Use aggregation to join with forms and filter by vendor-service form type
+          let categoryName = 'General Service';
+          const vendorCategoryId = vendor.categoryId;
+          
+          if (vendorCategoryId && ObjectId.isValid(vendorCategoryId)) {
+            try {
+              // Use aggregation pipeline to find category from categories collection
+              // and ensure it's linked to a form with type 'vendor-service'
+              const categoryResults = await this.serviceCategoryRepo
+                .aggregate([
+                  { $match: { _id: new ObjectId(vendorCategoryId) } },
+                  {
+                    $addFields: {
+                      formIdObj: {
+                        $cond: {
+                          if: { $and: [{ $ne: ['$formId', null] }, { $ne: ['$formId', ''] }] },
+                          then: { $toObjectId: '$formId' },
+                          else: null
+                        }
+                      }
+                    }
+                  },
+                  {
+                    $lookup: {
+                      from: 'forms',
+                      localField: 'formIdObj',
+                      foreignField: '_id',
+                      as: 'formData'
+                    }
+                  },
+                  {
+                    $unwind: {
+                      path: '$formData',
+                      preserveNullAndEmptyArrays: false
+                    }
+                  },
+                  {
+                    $match: {
+                      'formData.type': 'vendor-service'
+                    }
+                  },
+                  {
+                    $project: {
+                      _id: 1,
+                      name: 1,
+                      description: 1
+                    }
+                  }
+                ])
+                .toArray();
+              
+              if (categoryResults && categoryResults.length > 0) {
+                categoryName = categoryResults[0].name;
+              } else {
+                // Fallback: try direct lookup without form type filter
+                const category = await this.serviceCategoryRepo.findOneBy({ _id: new ObjectId(vendorCategoryId) });
+                if (category && !category.isDeleted) {
+                  categoryName = category.name;
+                }
+              }
+            } catch (error) {
+              console.log('Category lookup failed for vendor:', vendor.id, 'categoryId:', vendorCategoryId, 'error:', error);
+            }
+          }
+          
           // Generate category-specific pricing
-          const categoryName = category?.name || 'General Service';
           const categoryPricing = CategoryPricingHelper.generateCategoryPricing(categoryName);
           
           return { 
             ...vendor, 
-            categoryName : category?.name,
+            categoryId: vendorCategoryId,
+            categoryName: categoryName,
             // Ensure price is included from vendor data (original price from DB)
             price: vendor.price || vendor.formData?.price || (vendor.formData?.fields?.Price ? parseFloat(vendor.formData.fields.Price) : undefined) || 0,
             location: {
@@ -244,6 +311,16 @@ export class VendorService {
       const data = plainToInstance(VendorResponseDto, populatedVendors, {
         excludeExtraneousValues: true,
       });
+      
+      // Explicitly ensure categoryId and categoryName are present after transformation
+      const finalData = data.map((vendorDto: any, index: number) => {
+        const originalVendor = populatedVendors[index];
+        if (originalVendor) {
+          vendorDto.categoryId = originalVendor.categoryId;
+          vendorDto.categoryName = originalVendor.categoryName;
+        }
+        return vendorDto;
+      });
   
       const pagination: IPaginationMeta = {
         total,
@@ -252,7 +329,7 @@ export class VendorService {
         totalPages: Math.ceil(total / limit),
       };
   
-      return { data, pagination };
+      return { data: finalData, pagination };
     } catch (error) {
       console.error('Error fetching vendors:', error);
       throw new BadRequestException('Failed to fetch vendors');
@@ -274,12 +351,61 @@ export class VendorService {
     let categoryName = 'General Service';
     if (vendor.categoryId && ObjectId.isValid(vendor.categoryId)) {
       try {
-        const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(vendor.categoryId) });
-        if (category && !category.isDeleted) {
-          categoryName = category.name;
+        // Use aggregation to find category from categories collection with vendor-service form type
+        const categoryResults = await this.serviceCategoryRepo
+          .aggregate([
+            { $match: { _id: new ObjectId(vendor.categoryId) } },
+            {
+              $addFields: {
+                formIdObj: {
+                  $cond: {
+                    if: { $and: [{ $ne: ['$formId', null] }, { $ne: ['$formId', ''] }] },
+                    then: { $toObjectId: '$formId' },
+                    else: null
+                  }
+                }
+              }
+            },
+            {
+              $lookup: {
+                from: 'forms',
+                localField: 'formIdObj',
+                foreignField: '_id',
+                as: 'formData'
+              }
+            },
+            {
+              $unwind: {
+                path: '$formData',
+                preserveNullAndEmptyArrays: false
+              }
+            },
+            {
+              $match: {
+                'formData.type': 'vendor-service'
+              }
+            },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                description: 1
+              }
+            }
+          ])
+          .toArray();
+        
+        if (categoryResults && categoryResults.length > 0) {
+          categoryName = categoryResults[0].name;
+        } else {
+          // Fallback: try direct lookup
+          const category = await this.serviceCategoryRepo.findOneBy({ _id: new ObjectId(vendor.categoryId) });
+          if (category && !category.isDeleted) {
+            categoryName = category.name;
+          }
         }
       } catch (error) {
-        console.log('Category lookup failed, using default category name');
+        console.log('Category lookup failed, using default category name:', error);
       }
     }
 
@@ -315,25 +441,67 @@ export class VendorService {
     
     if (vendor.categoryId && ObjectId.isValid(vendor.categoryId)) {
       try {
-        // Try to find the category using _id field (ObjectIdColumn)
-        const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(vendor.categoryId) });
-        if (category && !category.isDeleted) {
-          categoryName = category.name;
+        // Use aggregation to find category from categories collection with vendor-service form type
+        const categoryResults = await this.serviceCategoryRepo
+          .aggregate([
+            { $match: { _id: new ObjectId(vendor.categoryId) } },
+            {
+              $addFields: {
+                formIdObj: {
+                  $cond: {
+                    if: { $and: [{ $ne: ['$formId', null] }, { $ne: ['$formId', ''] }] },
+                    then: { $toObjectId: '$formId' },
+                    else: null
+                  }
+                }
+              }
+            },
+            {
+              $lookup: {
+                from: 'forms',
+                localField: 'formIdObj',
+                foreignField: '_id',
+                as: 'formData'
+              }
+            },
+            {
+              $unwind: {
+                path: '$formData',
+                preserveNullAndEmptyArrays: false
+              }
+            },
+            {
+              $match: {
+                'formData.type': 'vendor-service'
+              }
+            },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                description: 1
+              }
+            }
+          ])
+          .toArray();
+        
+        if (categoryResults && categoryResults.length > 0) {
+          categoryName = categoryResults[0].name;
         } else {
-          // If not found with findOneBy, try using findOne with where clause
-          const categoryAlt = await this.categoryRepo.findOne({
-            where: { _id: new ObjectId(vendor.categoryId), isDeleted: false }
-          });
-          if (categoryAlt) {
-            categoryName = categoryAlt.name;
+          // Fallback: try direct lookup
+          const category = await this.serviceCategoryRepo.findOneBy({ _id: new ObjectId(vendor.categoryId) });
+          if (category && !category.isDeleted) {
+            categoryName = category.name;
           } else {
-            // Try to find any category with this ID regardless of isDeleted status
-            const categoryAny = await this.categoryRepo.findOneBy({ _id: new ObjectId(vendor.categoryId) });
-            if (categoryAny) {
-              categoryName = categoryAny.name;
+            // Try with findOne
+            const categoryAlt = await this.serviceCategoryRepo.findOne({
+              where: { _id: new ObjectId(vendor.categoryId), isDeleted: false }
+            });
+            if (categoryAlt) {
+              categoryName = categoryAlt.name;
             } else {
               // Category not found - try to assign a default category
-              const defaultCategory = await this.categoryRepo.findOne({
+              const defaultCategory = await this.serviceCategoryRepo.findOne({
                 where: { isDeleted: false, isActive: true },
                 order: { createdAt: 'ASC' }
               });
@@ -449,7 +617,9 @@ export class VendorService {
         };
       }),
       category_id: originalCategoryId || '',
-      category_name: categoryName
+      category_name: categoryName,
+      categoryId: originalCategoryId || '',
+      categoryName: categoryName
     };
 
     return plainToInstance(VendorDetailResponseDto, transformedVendor, { 
@@ -465,7 +635,8 @@ export class VendorService {
     }
 
     // Use aggregation to join category with forms table and filter by form type 'vendor-service'
-    const categoryWithForm = await this.categoryRepo
+    // Use ServiceCategory (categories collection) instead of VendorCategory
+    const categoryWithForm = await this.serviceCategoryRepo
       .aggregate([
         { 
           $match: { 
@@ -475,7 +646,13 @@ export class VendorService {
         },
         {
           $addFields: {
-            formIdObj: { $toObjectId: "$formId" }
+            formIdObj: {
+              $cond: {
+                if: { $and: [{ $ne: ['$formId', null] }, { $ne: ['$formId', ''] }] },
+                then: { $toObjectId: '$formId' },
+                else: null
+              }
+            }
           }
         },
         {
@@ -507,7 +684,7 @@ export class VendorService {
 
     if (!categoryWithForm || categoryWithForm.length === 0) {
       // Check if category exists but form type is wrong
-      const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(categoryId) });
+      const category = await this.serviceCategoryRepo.findOneBy({ _id: new ObjectId(categoryId) });
       if (!category || category.isDeleted) {
         throw new NotFoundException('Category not found');
       }
