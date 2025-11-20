@@ -857,8 +857,14 @@ export class VenueService {
       };
       
       // Only include fields that are actually provided
-      if (updateDto.name !== undefined) updateData.name = updateDto.name;
-      if (updateDto.title !== undefined) updateData.title = updateDto.title;
+      if (updateDto.name !== undefined) {
+        updateData.name = updateDto.name;
+        // When name is updated, also update title to match name in the database
+        updateData.title = updateDto.name;
+      } else if (updateDto.title !== undefined) {
+        // Only set title independently if name is not being updated
+        updateData.title = updateDto.title;
+      }
       if (updateDto.description !== undefined) updateData.description = updateDto.description;
       if (updateDto.longDescription !== undefined) updateData.longDescription = updateDto.longDescription;
       if (updateDto.serviceCategoryId !== undefined) updateData.categoryId = updateDto.serviceCategoryId;

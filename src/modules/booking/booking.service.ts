@@ -509,7 +509,7 @@ export class BookingService {
             pricing: (venueOrVendor as any)?.pricing || venueOrVendor?.formData?.pricing || [], // Add pricing array from venue or formData
             status: (booking as any).bookingStatus || 'pending', // Add booking status
             rating: venueOrVendor?.averageRating || 0,
-            imageUrl: venueOrVendor?.imageUrl || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb',
+            imageUrl: venueOrVendor?.imageUrl || '',
             reviews: venueOrVendor?.totalRatings || 0,
             hasOffers: hasOffers, // Dynamically calculated hasOffers flag
             userHasSubmittedOffer: userHasSubmittedOffer, // Whether current user has submitted an offer
@@ -657,6 +657,34 @@ export class BookingService {
                   
                   // Add pricing to venue object
                   (venueOrVendor as any).pricing = venueOrVendor.formData?.pricing || categoryPricing;
+                  
+                  // Extract image URL from venue formData (similar to venue listing endpoints)
+                  let imageUrlFromFormData = venueOrVendor.imageUrl || venueOrVendor.formData?.imageUrl || venueOrVendor.formData?.images?.[0] || '';
+                  
+                  // Extract from formData.fields if it exists (for MultiImageUpload fields)
+                  if (venueOrVendor.formData?.fields && Array.isArray(venueOrVendor.formData.fields)) {
+                    const imageField = venueOrVendor.formData.fields.find((field: any) => 
+                      field.type === 'MultiImageUpload' && 
+                      field.actualValue && 
+                      Array.isArray(field.actualValue) && 
+                      field.actualValue.length > 0
+                    );
+                    
+                    if (imageField && imageField.actualValue && imageField.actualValue.length > 0) {
+                      const firstImage = imageField.actualValue[0];
+                      // Check for url.imageUrl structure
+                      if (firstImage.url && firstImage.url.imageUrl) {
+                        imageUrlFromFormData = firstImage.url.imageUrl;
+                      } else if (typeof firstImage === 'string') {
+                        imageUrlFromFormData = firstImage;
+                      } else if (firstImage.url) {
+                        imageUrlFromFormData = firstImage.url;
+                      }
+                    }
+                  }
+                  
+                  // Set the extracted image URL on the venue object (no hardcoded fallback)
+                  (venueOrVendor as any).imageUrl = imageUrlFromFormData || venueOrVendor.imageUrl || '';
                 }
               } else if ((booking as any).bookingType === 'vendor') {
                 console.log('Querying vendor with venueId:', venueId);
@@ -689,6 +717,36 @@ export class BookingService {
                   } catch (error) {
                     console.log('Error fetching vendor category:', error);
                   }
+                }
+                
+                // Extract image URL from vendor formData (similar to vendor listing endpoints)
+                if (venueOrVendor) {
+                  let imageUrlFromFormData = venueOrVendor.imageUrl || venueOrVendor.formData?.imageUrl || venueOrVendor.formData?.images?.[0] || '';
+                  
+                  // Extract from formData.fields if it exists (for MultiImageUpload fields)
+                  if (venueOrVendor.formData?.fields && Array.isArray(venueOrVendor.formData.fields)) {
+                    const imageField = venueOrVendor.formData.fields.find((field: any) => 
+                      field.type === 'MultiImageUpload' && 
+                      field.actualValue && 
+                      Array.isArray(field.actualValue) && 
+                      field.actualValue.length > 0
+                    );
+                    
+                    if (imageField && imageField.actualValue && imageField.actualValue.length > 0) {
+                      const firstImage = imageField.actualValue[0];
+                      // Check for url.imageUrl structure
+                      if (firstImage.url && firstImage.url.imageUrl) {
+                        imageUrlFromFormData = firstImage.url.imageUrl;
+                      } else if (typeof firstImage === 'string') {
+                        imageUrlFromFormData = firstImage;
+                      } else if (firstImage.url) {
+                        imageUrlFromFormData = firstImage.url;
+                      }
+                    }
+                  }
+                  
+                  // Set the extracted image URL on the vendor object (no hardcoded fallback)
+                  (venueOrVendor as any).imageUrl = imageUrlFromFormData || venueOrVendor.imageUrl || '';
                 }
                 
                 // If vendor not found, create a fallback vendor object
@@ -774,7 +832,7 @@ export class BookingService {
             pricing: (venueOrVendor as any)?.pricing || venueOrVendor?.formData?.pricing || [], // Add pricing array from venue or formData
             status: (booking as any).bookingStatus || 'pending', // Add booking status
             rating: venueOrVendor?.averageRating || 0,
-            imageUrl: venueOrVendor?.imageUrl || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb',
+            imageUrl: venueOrVendor?.imageUrl || '',
             reviews: venueOrVendor?.totalRatings || 0,
             hasOffers: hasOffers, // Dynamically calculated hasOffers flag
             // Add missing fields for frontend compatibility

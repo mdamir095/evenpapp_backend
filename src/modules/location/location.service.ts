@@ -139,6 +139,39 @@ export class LocationService {
     return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
   }
 
+  // Helper function to extract image URL from formData (similar to vendor/venue listing endpoints)
+  private extractImageUrl(entity: any): string {
+    if (!entity) return '';
+    
+    // Start with direct imageUrl
+    let imageUrl = entity.imageUrl || entity.formData?.imageUrl || entity.formData?.images?.[0] || '';
+    
+    // Extract from formData.fields if it exists (for MultiImageUpload fields)
+    if (entity.formData?.fields && Array.isArray(entity.formData.fields)) {
+      const imageField = entity.formData.fields.find((field: any) => 
+        field.type === 'MultiImageUpload' && 
+        field.actualValue && 
+        Array.isArray(field.actualValue) && 
+        field.actualValue.length > 0
+      );
+      
+      if (imageField && imageField.actualValue && imageField.actualValue.length > 0) {
+        const firstImage = imageField.actualValue[0];
+        // Check for url.imageUrl structure
+        if (firstImage.url && firstImage.url.imageUrl) {
+          imageUrl = firstImage.url.imageUrl;
+        } else if (typeof firstImage === 'string') {
+          imageUrl = firstImage;
+        } else if (firstImage.url) {
+          imageUrl = firstImage.url;
+        }
+      }
+    }
+    
+    // Return the extracted image URL, or empty string if not found
+    return imageUrl && imageUrl.trim() !== '' ? imageUrl : '';
+  }
+
   async findNearby(lng: number, lat: number, radiusMeters = 5000, type?: 'vendor' | 'venue') {
     try {
       const results = [];
@@ -183,13 +216,16 @@ export class LocationService {
           // Only include if within radius
           if (distance <= radiusMeters) {
             vendorsInRadius++;
+            // Extract image URL dynamically from formData
+            const imageUrl = this.extractImageUrl(vendor);
+            
             results.push({
               id: vendor.id.toString(),
               title: vendor.title || vendor.name,
               price: vendor.price || 150.00,
               rating: vendor.averageRating || 4.4,
               reviews: vendor.totalRatings || 453,
-              image: vendor.imageUrl || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQZBdgFa0P0zkOM4y4FawsIT3Kc_Pp5FucS5CrSndvKMuLywrk9nRvhIBQBbUExCPTk-ss&usqp=CAU',
+              image: imageUrl, // Use dynamically extracted image
               distance: Math.round(distance), // Add distance in meters
               coordinates: coords // Add coordinates for debugging
             });
@@ -231,13 +267,16 @@ export class LocationService {
           
           // Only include if within radius
           if (distance <= radiusMeters) {
+            // Extract image URL dynamically from formData
+            const imageUrl = this.extractImageUrl(venue);
+            
             results.push({
               id: venue.id.toString(),
               title: venue.title || venue.name,
               price: venue.price || 150.00,
               rating: venue.averageRating || 4.4,
               reviews: venue.totalRatings || 453,
-              image: venue.imageUrl || 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQZBdgFa0P0zkOM4y4FawsIT3Kc_Pp5FucS5CrSndvKMuLywrk9nRvhIBQBbUExCPTk-ss&usqp=CAU',
+              image: imageUrl, // Use dynamically extracted image
               distance: Math.round(distance), // Add distance in meters
               coordinates: coords // Add coordinates for debugging
             });

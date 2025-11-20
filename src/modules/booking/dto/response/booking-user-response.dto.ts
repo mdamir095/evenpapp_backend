@@ -67,10 +67,27 @@ export class BookingUserResponseDto {
   @Transform(({ obj }) => obj.venue?.totalRatings || 0)
   reviews: number;
 
-  @ApiProperty({ description: "URL of the venue's image" })
+  @ApiProperty({ description: "URL of the venue's or vendor's image" })
   @Expose()
-  @Transform(({ obj }) => obj.venue?.imageUrl || 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb')
+  @Transform(({ obj }) => {
+    // Check multiple possible sources for imageUrl
+    // Priority: direct imageUrl > venue.imageUrl > vendor.imageUrl
+    const imageUrl = obj.imageUrl || obj.venue?.imageUrl || obj.vendor?.imageUrl;
+    // Return the imageUrl if it exists and is not empty, otherwise return empty string
+    return imageUrl && imageUrl.trim() !== '' ? imageUrl : '';
+  })
   image: string;
+
+  @ApiProperty({ description: "URL of the venue's or vendor's image (alias for image)" })
+  @Expose()
+  @Transform(({ obj }) => {
+    // Check multiple possible sources for imageUrl
+    // Priority: direct imageUrl > venue.imageUrl > vendor.imageUrl
+    const imageUrl = obj.imageUrl || obj.venue?.imageUrl || obj.vendor?.imageUrl;
+    // Return the imageUrl if it exists and is not empty, otherwise return empty string
+    return imageUrl && imageUrl.trim() !== '' ? imageUrl : '';
+  })
+  imageUrl: string;
 
   @ApiProperty({ description: 'Status of the venue booking' })
   @Expose()
