@@ -1046,8 +1046,6 @@ export class BookingService {
       
       // Ensure userId is a string
       const userIdString = String(userId);
-      console.log('Booking Service - User ID:', userIdString, 'Type:', typeof userIdString);
-      
       let uploadedImageUrls: string[] = [];
       if (dto.referenceImages?.length) {
         console.log(`📸 Processing ${dto.referenceImages.length} reference images for booking...`);
@@ -1071,6 +1069,7 @@ export class BookingService {
       referenceImages: uploadedImageUrls,
       eventDate: dto.eventDate,
       endDate: dto.endDate,
+      timeSlot: (dto as any).timeSlot ?? null,
       bookingStatus: BookingStatus.PENDING // Explicitly set to pending by default
     });
     

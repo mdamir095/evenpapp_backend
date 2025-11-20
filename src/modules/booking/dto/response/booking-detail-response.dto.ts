@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Expose, Transform, Type } from 'class-transformer'
+import { TimeSlot } from '../../entities/booking.entity'
 
 export class BookingVenueResponseDto {
   @ApiProperty()
@@ -68,6 +69,10 @@ export class BookingDetailResponseDto {
   @ApiProperty()
   @Expose()
   endTime: string
+
+  @ApiProperty({ required: false, enum: TimeSlot, enumName: 'TimeSlot' })
+  @Expose()
+  timeSlot?: TimeSlot
 
   @ApiProperty({ required: false })
   @Expose()

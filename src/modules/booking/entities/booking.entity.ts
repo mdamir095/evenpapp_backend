@@ -50,6 +50,13 @@ export class Booking extends BaseModel {
   @Column()
   endTime: string
 
+  @Column({
+    type: 'enum',
+    enum: TimeSlot,
+    nullable: true,
+  })
+  timeSlot?: TimeSlot
+
   @Column({ nullable: true })
   venueAddress?: string
 
