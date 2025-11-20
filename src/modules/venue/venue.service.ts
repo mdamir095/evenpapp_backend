@@ -16,6 +16,7 @@ import { CategoryPricingHelper } from './helpers/category-pricing.helper';
 import { Rating } from '../rating/entity/rating.entity';
 import { User } from '../user/entities/user.entity';
 import { ServiceCategory } from '../service-category/entity/service-category.entity';
+import { Form } from '../form/entity/form.entity';
 import { LocationService } from '@modules/location/location.service';
 import { SupabaseService } from '@shared/modules/supabase/supabase.service';
 import * as path from 'path';
@@ -29,6 +30,8 @@ export class VenueService {
     private readonly ratingRepo: MongoRepository<Rating>,
     @InjectRepository(ServiceCategory, 'mongo')
     private readonly categoryRepo: MongoRepository<ServiceCategory>,
+    @InjectRepository(Form, 'mongo')
+    private readonly formRepo: MongoRepository<Form>,
     @InjectRepository(User, 'mongo')
     private readonly userRepo: MongoRepository<User>,
     private readonly locationService: LocationService,
@@ -242,9 +245,20 @@ export class VenueService {
         
         // Get category information for pricing generation
         let categoryName = 'General Venue';
-        if (venue.categoryId && ObjectId.isValid(venue.categoryId)) {
+        const venueCategoryId = venue.categoryId;
+        
+        if (venueCategoryId && ObjectId.isValid(venueCategoryId)) {
           try {
-            const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(venue.categoryId) });
+            // Try multiple query methods to find the category
+            let category = await this.categoryRepo.findOneBy({ _id: new ObjectId(venueCategoryId) });
+            
+            // If not found, try with findOne
+            if (!category) {
+              category = await this.categoryRepo.findOne({
+                where: { _id: new ObjectId(venueCategoryId) }
+              });
+            }
+            
             if (category && !category.isDeleted) {
               categoryName = category.name;
             }
@@ -259,6 +273,8 @@ export class VenueService {
         return {
           ...venue,
           serviceCategoryId: venue.categoryId,
+          categoryId: venueCategoryId,
+          categoryName: categoryName,
           location: {
             address: storedLocation?.address || venue.formData?.address || venue.formData?.location || 'Address not available',
             city: venue.formData?.city || 'City not available',
@@ -275,6 +291,16 @@ export class VenueService {
         excludeExtraneousValues: true
       });
 
+      // Explicitly ensure categoryId and categoryName are present after transformation
+      const finalData = data.map((venueDto: any, index: number) => {
+        const originalVenue = transformedVenues[index];
+        if (originalVenue) {
+          venueDto.categoryId = originalVenue.categoryId;
+          venueDto.categoryName = originalVenue.categoryName;
+        }
+        return venueDto;
+      });
+
       const pagination: IPaginationMeta = {
         total,
         page,
@@ -282,7 +308,7 @@ export class VenueService {
         totalPages: Math.ceil(total / limit)
       };
 
-      return { data, pagination };
+      return { data: finalData, pagination };
     } catch (error) {
       throw new BadRequestException('Failed to fetch venues');
     }
@@ -547,51 +573,76 @@ export class VenueService {
       throw new NotFoundException('Venue not found');
     }
 
-    // Get category information
+    // Get category information - filter by form type 'venue-category' to ensure we get the correct category
     let categoryName = 'Uncategorized';
     const originalCategoryId = venue.categoryId; // Preserve original categoryId
     
     if (venue.categoryId && ObjectId.isValid(venue.categoryId)) {
       try {
-        // Try to find the category using findOneBy - match categoryId with _id in categories table
-        const category = await this.categoryRepo.findOneBy({ id: new ObjectId(venue.categoryId) });
-        if (category && !category.isDeleted) {
-          categoryName = category.name;
-        } else {
-          // If not found with findOneBy, try using findOne with where clause
-          const categoryAlt = await this.categoryRepo.findOne({
-            where: { id: new ObjectId(venue.categoryId), isDeleted: false }
-          });
-          if (categoryAlt) {
-            categoryName = categoryAlt.name;
-          } else {
-            // Try to find any category with this ID regardless of isDeleted status
-            const categoryAny = await this.categoryRepo.findOneBy({ id: new ObjectId(venue.categoryId) });
-            if (categoryAny) {
-              categoryName = categoryAny.name;
-            } else {
-              // Category not found - try to assign a default category
-              const defaultCategory = await this.categoryRepo.findOne({
-                where: { isDeleted: false, isActive: true },
-                order: { createdAt: 'ASC' }
-              });
-              
-              if (defaultCategory) {
-                // Update the venue with the default category
-                const categoryIdString = defaultCategory.id.toString();
-                await this.venueRepo.updateOne(
-                  { _id: new ObjectId(id) },
-                  { $set: { categoryId: categoryIdString, updatedAt: new Date() } }
-                );
-                // Don't update the venue object - keep original categoryId for response
-                categoryName = defaultCategory.name;
-              } else {
-                categoryName = 'No Categories Available';
+        // Use aggregation to join category with forms and filter by form type 'venue-category'
+        const categoryResults = await this.categoryRepo
+          .aggregate([
+            { $match: { _id: new ObjectId(venue.categoryId) } },
+            {
+              $addFields: {
+                formIdObj: {
+                  $cond: {
+                    if: { $and: [{ $ne: ['$formId', null] }, { $ne: ['$formId', ''] }] },
+                    then: { $toObjectId: '$formId' },
+                    else: null
+                  }
+                }
+              },
+            },
+            {
+              $lookup: {
+                from: 'forms',
+                localField: 'formIdObj',
+                foreignField: '_id',
+                as: 'formData',
+              },
+            },
+            { 
+              $unwind: { 
+                path: '$formData', 
+                preserveNullAndEmptyArrays: false 
+              } 
+            },
+            // Filter to only include categories with forms of type 'venue-category'
+            {
+              $match: {
+                'formData.type': 'venue-category'
               }
+            },
+            {
+              $project: {
+                _id: 1,
+                name: 1,
+                formId: 1
+              }
+            }
+          ])
+          .toArray();
+
+        if (categoryResults && categoryResults.length > 0) {
+          categoryName = categoryResults[0].name;
+        } else {
+          // If not found with venue-category filter, try without filter as fallback
+          const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(venue.categoryId) });
+          if (category && !category.isDeleted) {
+            categoryName = category.name;
+          } else {
+            // Try with findOne
+            const categoryAlt = await this.categoryRepo.findOne({
+              where: { _id: new ObjectId(venue.categoryId) }
+            });
+            if (categoryAlt && !categoryAlt.isDeleted) {
+              categoryName = categoryAlt.name;
             }
           }
         }
       } catch (error) {
+        console.log('Category lookup error:', error);
         categoryName = 'Category Lookup Error';
       }
     } else {
