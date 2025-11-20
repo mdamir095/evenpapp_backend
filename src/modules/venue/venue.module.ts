@@ -10,6 +10,7 @@ import { VenueCategoryModule } from '@modules/venue-category/venue-category.modu
 import { ServiceCategory } from '../service-category/entity/service-category.entity';
 import { forwardRef } from '@nestjs/common';
 import { User } from '../user/entities/user.entity';
+import { SupabaseModule } from '@shared/modules/supabase/supabase.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { User } from '../user/entities/user.entity';
     VenueCategoryModule,
     LocationModule,
     forwardRef(() => RatingModule),
+    SupabaseModule,
   ],
   controllers: [VenueController],
   providers: [VenueService, VenueFormValidator],

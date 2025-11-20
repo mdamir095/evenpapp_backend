@@ -116,6 +116,120 @@ export class AdminController {
     });
   }
 
+  @Get('users/type/user')
+  @UseGuards(AuthGuard('jwt'), FeatureGuard)
+  @Features(FeatureType.USER_MANAGEMENT)
+  @ApiOperation({ 
+    summary: 'Get all users with userType USER',
+    description: 'Retrieve all users where userType is USER. This endpoint is for admin panel to manage regular users.'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'List of users with userType USER',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              firstName: { type: 'string' },
+              lastName: { type: 'string' },
+              email: { type: 'string' },
+              phoneNumber: { type: 'string' },
+              countryCode: { type: 'string' },
+              organizationName: { type: 'string' },
+              userType: { type: 'string', example: 'USER' },
+              isActive: { type: 'boolean' },
+              isBlocked: { type: 'boolean' },
+              isEmailVerified: { type: 'boolean' },
+              isPhoneVerified: { type: 'boolean' },
+              roles: { type: 'array' },
+            }
+          }
+        },
+        pagination: {
+          type: 'object',
+          properties: {
+            total: { type: 'number' },
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            totalPages: { type: 'number' },
+          }
+        }
+      }
+    }
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Search keyword (searches in firstName, lastName, email, organizationName)',
+  })
+  @ApiQuery({ 
+    name: 'email', 
+    required: false, 
+    description: 'Filter by email (case-insensitive)' 
+  })
+  @ApiQuery({
+    name: 'firstName',
+    required: false,
+    description: 'Filter by first name (case-insensitive)',
+  })
+  @ApiQuery({
+    name: 'lastName',
+    required: false,
+    description: 'Filter by last name (case-insensitive)',
+  })
+  @ApiQuery({
+    name: 'organizationName',
+    required: false,
+    description: 'Filter by organization name (case-insensitive)',
+  })
+  @ApiQuery({
+    name: 'roleName',
+    required: false,
+    description: 'Filter by role name',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (default: 1)',
+    example: 1,
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Items per page (default: 10)',
+    example: 10,
+    type: Number,
+  })
+  async getAllUsersByType(
+    @Req() req: any,
+    @Query('search') search?: string,
+    @Query('email') email?: string,
+    @Query('firstName') firstName?: string,
+    @Query('lastName') lastName?: string,
+    @Query('organizationName') organizationName?: string,
+    @Query('roleName') roleName?: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+  ) {
+    const currentUser = req.user;
+    return this.adminService.getAllUsersByType(currentUser, {
+      search,
+      email,
+      firstName,
+      lastName,
+      organizationName,
+      roleName,
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
+  }
+
   @Post('feature-permission')
   @UseGuards(AuthGuard('jwt'), FeatureGuard)
   @Features(FeatureType.USER_MANAGEMENT)

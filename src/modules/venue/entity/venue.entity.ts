@@ -44,4 +44,11 @@ export class Venue extends BaseModel {
     createdAt: Date;
     updatedAt: Date;
   }>;
+
+  @Column({ nullable: true })
+  @Index()
+  enterpriseId: string;
+
+  @Column({ nullable: true })
+  enterpriseName: string;
 }

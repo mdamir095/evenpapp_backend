@@ -17,6 +17,8 @@ import { Rating } from '../rating/entity/rating.entity';
 import { User } from '../user/entities/user.entity';
 import { ServiceCategory } from '../service-category/entity/service-category.entity';
 import { LocationService } from '@modules/location/location.service';
+import { SupabaseService } from '@shared/modules/supabase/supabase.service';
+import * as path from 'path';
 
 @Injectable()
 export class VenueService {
@@ -30,32 +32,84 @@ export class VenueService {
     @InjectRepository(User, 'mongo')
     private readonly userRepo: MongoRepository<User>,
     private readonly locationService: LocationService,
+    private readonly supabaseService: SupabaseService,
   ) {}
 
-  async create(createDto: CreateVenueDto): Promise<VenueResponseDto> {
+  async create(createDto: CreateVenueDto, user?: any): Promise<VenueResponseDto> {
     try {
+      // Log received data for debugging
+      console.log('=== CREATE VENUE DEBUG ===');
+      console.log('Received DTO:', JSON.stringify(createDto, null, 2));
+      console.log('name:', createDto.name);
+      console.log('serviceCategoryId:', createDto.serviceCategoryId);
+      console.log('description:', createDto.description);
+      console.log('formData:', createDto.formData);
+      console.log('========================');
+      
+      // Use actual values from DTO
+      // If values are provided (even if empty string), use them
+      // Only default if truly undefined
+      const name = createDto.name !== undefined && createDto.name !== null ? createDto.name : '';
+      const serviceCategoryId = createDto.serviceCategoryId !== undefined && createDto.serviceCategoryId !== null ? createDto.serviceCategoryId : '';
+      const title = createDto.title !== undefined && createDto.title !== null ? createDto.title : (name || '');
+      const description = createDto.description !== undefined && createDto.description !== null ? createDto.description : null;
+      const formData = createDto.formData ?? {};
+      
+      console.log('Processed values:');
+      console.log('  name:', name, '(from DTO:', createDto.name, ')');
+      console.log('  serviceCategoryId:', serviceCategoryId, '(from DTO:', createDto.serviceCategoryId, ')');
+      console.log('  title:', title, '(from DTO:', createDto.title, ')');
+      console.log('  description:', description, '(from DTO:', createDto.description, ')');
+      
       // Validate and sanitize form data
-      VenueFormValidator.validateFormData(createDto.formData);
-      const sanitizedFormData = VenueFormValidator.sanitizeFormData(createDto.formData);
+      VenueFormValidator.validateFormData(formData);
+      const sanitizedFormData = VenueFormValidator.sanitizeFormData(formData);
 
-      // Check if venue name already exists for the same category
-      const existingVenue = await this.venueRepo.findOne({
-        where: {
-          name: createDto.name,
-          categoryId: createDto.serviceCategoryId,
+      // Determine enterprise information based on user type
+      let enterpriseId = createDto.enterpriseId;
+      let enterpriseName = createDto.enterpriseName;
+
+      // Check if user is an enterprise user (has enterpriseId in token)
+      if (user && user.enterpriseId) {
+        // Enterprise user - use their enterprise information
+        enterpriseId = user.enterpriseId;
+        enterpriseName = user.organizationName || createDto.enterpriseName || 'Unknown Enterprise';
+      } else if (!enterpriseId && !enterpriseName) {
+        // If no enterprise info provided and user doesn't have it, allow null (for admin users)
+        enterpriseId = undefined;
+        enterpriseName = undefined;
+      }
+
+      // Check if venue name already exists for the same category and enterprise (only if both are provided)
+      if (name && serviceCategoryId) {
+        const whereCondition: any = {
+          name: name,
+          categoryId: serviceCategoryId,
           isDeleted: false
+        };
+        
+        // If enterpriseId is provided, also check for enterprise uniqueness
+        if (enterpriseId) {
+          whereCondition.enterpriseId = enterpriseId;
         }
-      });
+        
+        const existingVenue = await this.venueRepo.findOne({
+          where: whereCondition
+        });
 
-      if (existingVenue) {
-        throw new BadRequestException('Venue with this name already exists in the selected category');
+        if (existingVenue) {
+          const errorMessage = enterpriseId 
+            ? 'Venue with this name already exists in the selected category for this enterprise'
+            : 'Venue with this name already exists in the selected category';
+          throw new BadRequestException(errorMessage);
+        }
       }
 
       // Get category information for pricing generation
       let categoryName = 'General Venue';
-      if (createDto.serviceCategoryId && ObjectId.isValid(createDto.serviceCategoryId)) {
+      if (serviceCategoryId && ObjectId.isValid(serviceCategoryId)) {
         try {
-          const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(createDto.serviceCategoryId) });
+          const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(serviceCategoryId) });
           if (category && !category.isDeleted) {
             categoryName = category.name;
           }
@@ -95,20 +149,44 @@ export class VenueService {
         }));
       }
 
-      const venue = this.venueRepo.create({
-        categoryId: createDto.serviceCategoryId, // Map serviceCategoryId to categoryId
-        name: createDto.name,
-        title: createDto.title,
-        description: createDto.description,
-        longDescription: createDto.longDescription || `Welcome to ${createDto.title}, a premier venue perfect for your special events. Our beautifully designed space offers a perfect blend of elegance and functionality, providing an ideal setting for weddings, corporate events, and celebrations. With state-of-the-art facilities and professional amenities, we ensure your event is memorable and seamless. Our experienced team is dedicated to providing exceptional service and attention to detail, making your special day truly unforgettable.`,
+      const venueData = {
+        categoryId: serviceCategoryId, // Map serviceCategoryId to categoryId
+        name: name,
+        title: title,
+        description: description ?? undefined, // Convert null to undefined for TypeORM
+        longDescription: createDto.longDescription || `Welcome to ${title || name || 'this venue'}, a premier venue perfect for your special events. Our beautifully designed space offers a perfect blend of elegance and functionality, providing an ideal setting for weddings, corporate events, and celebrations. With state-of-the-art facilities and professional amenities, we ensure your event is memorable and seamless. Our experienced team is dedicated to providing exceptional service and attention to detail, making your special day truly unforgettable.`,
         formData: sanitizedFormData,
         averageRating: 0, // Initialize new fields
         totalRatings: 0,
         price: 0, // Will be calculated from formData
         imageUrl: '', // Will be set from formData or default
-        albums: processedAlbums
-      });
-      const savedVenue = await this.venueRepo.save(venue);
+        albums: processedAlbums,
+        enterpriseId: enterpriseId,
+        enterpriseName: enterpriseName
+      };
+      
+      console.log('=== SAVING VENUE TO DATABASE ===');
+      console.log('Venue data to save:', JSON.stringify(venueData, null, 2));
+      console.log('categoryId:', venueData.categoryId);
+      console.log('name:', venueData.name);
+      console.log('title:', venueData.title);
+      console.log('description:', venueData.description);
+      console.log('enterpriseId:', venueData.enterpriseId);
+      console.log('enterpriseName:', venueData.enterpriseName);
+      console.log('================================');
+      
+      const venue = this.venueRepo.create(venueData);
+      const savedVenueResult = await this.venueRepo.save(venue);
+      // Handle both single entity and array return types
+      const savedVenue = Array.isArray(savedVenueResult) ? savedVenueResult[0] : savedVenueResult;
+      
+      console.log('=== SAVED VENUE ===');
+      console.log('Saved venue ID:', savedVenue.id);
+      console.log('Saved categoryId:', savedVenue.categoryId);
+      console.log('Saved name:', savedVenue.name);
+      console.log('Saved title:', savedVenue.title);
+      console.log('Saved description:', savedVenue.description);
+      console.log('===================');
       
       // Transform the response to map categoryId to serviceCategoryId
       const transformedVenue = {
@@ -322,7 +400,22 @@ export class VenueService {
       throw new BadRequestException('Invalid venue ID format');
     }
 
-    const venue = await this.venueRepo.findOneBy({ _id: new ObjectId(id) });
+    // Try multiple query methods to find the venue
+    let venue = await this.venueRepo.findOne({
+      where: { _id: new ObjectId(id) }
+    });
+    
+    // If not found, try with findOneBy
+    if (!venue) {
+      venue = await this.venueRepo.findOneBy({ _id: new ObjectId(id) });
+    }
+    
+    // If still not found, try with id field
+    if (!venue) {
+      venue = await this.venueRepo.findOne({
+        where: { id: id }
+      });
+    }
 
     if (!venue || venue.isDeleted) {
       throw new NotFoundException('Venue not found');
@@ -348,8 +441,12 @@ export class VenueService {
     const transformedVenue = {
       ...venue,
       serviceCategoryId: venue.categoryId,
-      pricing: venue.formData?.pricing || categoryPricing
+      pricing: venue.formData?.pricing || categoryPricing,
+      enterpriseId: venue.enterpriseId,
+      enterpriseName: venue.enterpriseName
     };
+    
+    console.log('Venue findOne - enterpriseId:', venue.enterpriseId, 'enterpriseName:', venue.enterpriseName);
     
     return plainToInstance(VenueResponseDto, transformedVenue, { 
       excludeExtraneousValues: true 
@@ -526,12 +623,37 @@ export class VenueService {
     return this.findAll(updatedPaginationDto);
   }
 
-  async update(id: string, updateDto: UpdateVenueDto): Promise<VenueResponseDto> {
+  async update(id: string, updateDto: UpdateVenueDto, user?: any): Promise<VenueResponseDto> {
     if (!ObjectId.isValid(id)) {
       throw new BadRequestException('Invalid venue ID format');
     }
 
-    const existingVenue = await this.venueRepo.findOneBy({ _id: new ObjectId(id) });
+    console.log('=== UPDATE VENUE DEBUG ===');
+    console.log('Venue ID:', id);
+    console.log('Update DTO:', JSON.stringify(updateDto, null, 2));
+    
+    // Try multiple query methods to find the venue
+    let existingVenue = await this.venueRepo.findOne({
+      where: { _id: new ObjectId(id) }
+    });
+    
+    // If not found, try with findOneBy
+    if (!existingVenue) {
+      existingVenue = await this.venueRepo.findOneBy({ _id: new ObjectId(id) });
+    }
+    
+    // If still not found, try with id field
+    if (!existingVenue) {
+      existingVenue = await this.venueRepo.findOne({
+        where: { id: id }
+      });
+    }
+
+    console.log('Existing venue found:', !!existingVenue);
+    if (existingVenue) {
+      console.log('Venue isDeleted:', existingVenue.isDeleted);
+      console.log('Venue name:', existingVenue.name);
+    }
 
     if (!existingVenue || existingVenue.isDeleted) {
       throw new NotFoundException('Venue not found');
@@ -557,22 +679,62 @@ export class VenueService {
     // Validate and sanitize formData if provided
     let sanitizedFormData;
     if (updateDto.formData) {
-      VenueFormValidator.validateFormData(updateDto.formData);
-      sanitizedFormData = VenueFormValidator.sanitizeFormData(updateDto.formData);
+      // Handle formData if it's a string (JSON string)
+      let formDataObj = updateDto.formData;
+      if (typeof formDataObj === 'string') {
+        try {
+          formDataObj = JSON.parse(formDataObj);
+        } catch (e) {
+          console.log('Failed to parse formData as JSON:', e);
+        }
+      }
+      
+      VenueFormValidator.validateFormData(formDataObj);
+      sanitizedFormData = VenueFormValidator.sanitizeFormData(formDataObj);
     }
 
     try {
+      // Determine enterprise information based on user type (similar to create)
+      let enterpriseId = updateDto.enterpriseId;
+      let enterpriseName = updateDto.enterpriseName;
+
+      // Check if user is an enterprise user (has enterpriseId in token)
+      if (user && user.enterpriseId) {
+        // Enterprise user - use their enterprise information
+        enterpriseId = user.enterpriseId;
+        enterpriseName = user.organizationName || updateDto.enterpriseName || 'Unknown Enterprise';
+      } else if (updateDto.enterpriseId === undefined && updateDto.enterpriseName === undefined) {
+        // If no enterprise info provided and user doesn't have it, keep existing values
+        // Don't update enterprise fields if not provided
+        enterpriseId = undefined;
+        enterpriseName = undefined;
+      }
+
+      // Prepare update data, excluding undefined values
       const updateData: any = {
-        ...updateDto,
-        ...(updateDto.serviceCategoryId && { categoryId: updateDto.serviceCategoryId }), // Map serviceCategoryId to categoryId
-        ...(sanitizedFormData && { formData: sanitizedFormData }),
         updatedAt: new Date()
       };
+      
+      // Only include fields that are actually provided
+      if (updateDto.name !== undefined) updateData.name = updateDto.name;
+      if (updateDto.title !== undefined) updateData.title = updateDto.title;
+      if (updateDto.description !== undefined) updateData.description = updateDto.description;
+      if (updateDto.longDescription !== undefined) updateData.longDescription = updateDto.longDescription;
+      if (updateDto.serviceCategoryId !== undefined) updateData.categoryId = updateDto.serviceCategoryId;
+      if (sanitizedFormData !== undefined) updateData.formData = sanitizedFormData;
+      if (updateDto.albums !== undefined) updateData.albums = updateDto.albums;
+      if (enterpriseId !== undefined) updateData.enterpriseId = enterpriseId;
+      if (enterpriseName !== undefined) updateData.enterpriseName = enterpriseName;
+      
+      console.log('Enterprise fields - enterpriseId:', enterpriseId, 'enterpriseName:', enterpriseName);
+
+      console.log('Update data to save:', JSON.stringify(updateData, null, 2));
 
       await this.venueRepo.updateOne({ _id: new ObjectId(id) }, { $set: updateData });
       return this.findOne(id);
     } catch (error) {
-      throw new BadRequestException('Failed to update venue');
+      console.error('Error updating venue:', error);
+      throw new BadRequestException(`Failed to update venue: ${error.message}`);
     }
   }
 
@@ -686,6 +848,102 @@ export class VenueService {
       );
     } catch (error) {
       console.error('Failed to update venue rating:', error);
+    }
+  }
+
+  /**
+   * Upload image file to Supabase (similar to profile image upload)
+   * @param file - Multer file object
+   * @returns Promise<string> - Public URL of uploaded image
+   */
+  async uploadImageToSupabase(file: Express.Multer.File): Promise<string> {
+    try {
+      console.log('Venue image upload method called, NODE_ENV:', process.env.NODE_ENV);
+      
+      // Validate file object
+      if (!file) {
+        throw new BadRequestException('File is required');
+      }
+      if (!file.buffer) {
+        throw new BadRequestException('File buffer is missing');
+      }
+      if (!file.mimetype) {
+        throw new BadRequestException('File mimetype is missing');
+      }
+      
+      // Validate file type
+      const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        throw new BadRequestException(`Invalid file type: ${file.mimetype}. Allowed types: PNG, JPEG, JPG`);
+      }
+      
+      // Generate unique filename to avoid conflicts
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const originalName = file.originalname || 'venue-image';
+      const fileExtension = path.extname(originalName) || '.jpg';
+      const fileName = `venue_${timestamp}_${randomSuffix}${fileExtension}`;
+      
+      // Check if Supabase is available
+      const isSupabaseAvailable = this.supabaseService?.isAvailable?.() || false;
+      
+      console.log('Upload configuration:', {
+        isSupabaseAvailable,
+        fileName,
+        fileSize: file.buffer.length,
+        mimetype: file.mimetype
+      });
+      
+      // Try Supabase first (if available)
+      if (isSupabaseAvailable) {
+        try {
+          console.log('☁️ Trying Supabase upload for venue image');
+          const supabaseBuckets = ['profiles', 'uploads', 'venues'];
+          
+          for (const bucket of supabaseBuckets) {
+            try {
+              console.log(`☁️ Trying Supabase bucket: ${bucket}`);
+              const uploadResult = await this.supabaseService.upload({
+                filePath: `venue/${fileName}`,
+                file: file.buffer,
+                contentType: file.mimetype,
+                bucket: bucket,
+                upsert: true,
+              });
+              
+              if (uploadResult?.publicUrl) {
+                console.log(`✅ Supabase upload successful (bucket: ${bucket}):`, uploadResult.publicUrl);
+                return uploadResult.publicUrl;
+              }
+            } catch (supabaseError: any) {
+              console.error(`⚠️ Supabase bucket ${bucket} failed:`, supabaseError?.message);
+              continue;
+            }
+          }
+        } catch (supabaseError: any) {
+          console.error('⚠️ Supabase upload failed:', supabaseError?.message);
+        }
+      }
+      
+      // If Supabase is not available or upload failed
+      throw new BadRequestException(
+        'File upload failed: Supabase is not configured or available. Please configure Supabase upload service.'
+      );
+      
+    } catch (error: any) {
+      console.error('Venue image upload error:', {
+        message: error?.message,
+        stack: error?.stack,
+        name: error?.name
+      });
+      
+      // If it's already a BadRequestException, re-throw it
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      
+      // Otherwise, wrap it
+      throw new BadRequestException(`File upload failed: ${error?.message || 'Unknown error'}`);
     }
   }
 }

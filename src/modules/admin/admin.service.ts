@@ -58,6 +58,37 @@ export class AdminService {
   });
   }
 
+  async getAllUsersByType(currentUser: any, {
+    search,
+    email,
+    firstName,
+    lastName,
+    organizationName,
+    roleName,
+    page = 1,
+    limit = 10,
+  }: {
+    search?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    organizationName?: string;
+    roleName?: string,
+    page?: number;
+    limit?: number;
+  }) {
+    return this.userService.findAllUsersByType(currentUser, {
+      search,
+      email,
+      firstName,
+      lastName,
+      organizationName,
+      roleName,
+      page,
+      limit,
+    });
+  }
+
   async getAllRoles(filters: {
   name?: string;
   page: number;

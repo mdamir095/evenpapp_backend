@@ -140,4 +140,12 @@ export class VenueResponseDto {
   @Expose()
   @Transform(({ obj }) => obj.totalRatings || 0)
   reviews: number;
+
+  @ApiProperty({ description: 'Enterprise ID associated with the venue', required: false })
+  @Expose()
+  enterpriseId?: string;
+
+  @ApiProperty({ description: 'Enterprise name associated with the venue', required: false })
+  @Expose()
+  enterpriseName?: string;
 }

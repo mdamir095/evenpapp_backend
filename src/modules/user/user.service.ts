@@ -575,6 +575,170 @@ export class UserService {
     };
   }
 
+  async findAllUsersByType(currentUser: any, {
+    search,
+    email,
+    firstName,
+    lastName,
+    organizationName,
+    roleName,
+    page = 1,
+    limit = 10,
+  }: {
+    search?: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    organizationName?: string;
+    roleName?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const matchConditions: any = { 
+      isDeleted: false, 
+      userType: 'USER',
+      _id: { $ne: new ObjectId(currentUser.id) } 
+    };
+
+    if (email) {
+      matchConditions.email = { $regex: email, $options: 'i' };
+    }
+    if (firstName)
+      matchConditions.firstName = { $regex: firstName, $options: 'i' };
+    if (lastName)
+      matchConditions.lastName = { $regex: lastName, $options: 'i' };
+    if (organizationName)
+      matchConditions.organizationName = {
+        $regex: organizationName,
+        $options: 'i',
+      };
+    if (search) {
+      const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      matchConditions.$or = [
+        { firstName: { $regex: safe, $options: 'i' } },
+        { lastName: { $regex: safe, $options: 'i' } },
+        { email: { $regex: safe, $options: 'i' } },
+        { organizationName: { $regex: safe, $options: 'i' } },
+      ];
+    }
+    const pipeline: any[] = [
+      { $match: matchConditions },
+
+      {
+        $lookup: {
+          from: 'roles',
+          localField: 'roleIds',
+          foreignField: '_id',
+          as: 'roles',
+        },
+      },
+
+      ...(roleName
+        ? [
+            {
+              $match: {
+                'roles.name': roleName,
+              },
+            },
+          ]
+        : []),
+
+      {
+        $unwind: {
+          path: '$roles',
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      {
+        $lookup: {
+          from: 'features',
+          localField: 'roles.featureIds',
+          foreignField: '_id',
+          as: 'roles.features',
+        },
+      },
+
+      {
+        $group: {
+          _id: '$_id',
+          firstName: { $first: '$firstName' },
+          lastName: { $first: '$lastName' },
+          email: { $first: '$email' },
+          password: { $first: '$password' },
+          phoneNumber: { $first: '$phoneNumber' },
+          countryCode: { $first: '$countryCode' },
+          organizationName: { $first: '$organizationName' },
+          key: { $first: '$key' },
+          isActive: { $first: '$isActive' },
+          isBlocked: { $first: '$isBlocked' },
+          isEmailVerified: { $first: '$isEmailVerified' },
+          isPhoneVerified: { $first: '$isPhoneVerified' },
+          userType: { $first: '$userType' },
+          profileImage: { $first: '$profileImage' },
+          gender: { $first: '$gender' },
+          birthday: { $first: '$birthday' },
+          address: { $first: '$address' },
+          city: { $first: '$city' },
+          state: { $first: '$state' },
+          pincode: { $first: '$pincode' },
+          isMobileAppUser: { $first: '$isMobileAppUser' },
+          created: { $first: '$created' },
+          modified: { $first: '$modified' },
+          roleIds: { $first: '$roleIds' },
+          roles: { $push: '$roles' },
+        },
+      },
+
+      {
+        $project: {
+          id: '$_id',
+          _id: 0,
+          firstName: 1,
+          lastName: 1,
+          email: 1,
+          phoneNumber: 1,
+          countryCode: 1,
+          organizationName: 1,
+          key: 1,
+          isActive: 1,
+          isBlocked: 1,
+          isEmailVerified: 1,
+          isPhoneVerified: 1,
+          userType: 1,
+          profileImage: 1,
+          gender: 1,
+          birthday: 1,
+          address: 1,
+          city: 1,
+          state: 1,
+          pincode: 1,
+          isMobileAppUser: 1,
+          created: 1,
+          modified: 1,
+          roleIds: 1,
+          roles: 1,
+        },
+      },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+    ];
+
+    const data = await this.userRepository.aggregate(pipeline).toArray();
+
+    const total = await this.userRepository.countDocuments(matchConditions);
+
+    return {
+      data,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   async findAllForEnterpriseUsers(currentUser: any, {
     search,
     enterpriseId,
