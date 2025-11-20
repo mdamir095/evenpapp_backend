@@ -3,7 +3,6 @@ import { ApiProperty } from '@nestjs/swagger';
 
 // Allowed labels for the dropdown (derived from design screenshots)
 export enum ServiceCategoryFormLabel {
-  EventType = 'Event Type',
   EventDate = 'Event Date',
   EndDate = 'End Date',
   StartTime = 'Start Time',
@@ -26,7 +25,6 @@ export enum ServiceCategoryFormLabel {
 }
 export const SERVICE_CATEGORY_FORM_LABEL_GROUPS: Record<string, ServiceCategoryFormLabel[]> = {
   photographer: [
-    ServiceCategoryFormLabel.EventType,
     ServiceCategoryFormLabel.EventDate,
     ServiceCategoryFormLabel.EndDate,
     ServiceCategoryFormLabel.StartTime,
@@ -41,7 +39,6 @@ export const SERVICE_CATEGORY_FORM_LABEL_GROUPS: Record<string, ServiceCategoryF
     ServiceCategoryFormLabel.ReferenceIdeas,
   ],
   catering: [
-    ServiceCategoryFormLabel.EventType,
     ServiceCategoryFormLabel.EventDate,
     ServiceCategoryFormLabel.EndDate,
     ServiceCategoryFormLabel.StartTime,
