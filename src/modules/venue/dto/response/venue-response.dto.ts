@@ -37,6 +37,16 @@ export class VenueResponseDto {
   @Expose()
   serviceCategoryId: string;
 
+  @ApiProperty({ description: 'Category ID of the venue' })
+  @Expose()
+  @Transform(({ obj }) => obj.categoryId || obj.serviceCategoryId)
+  categoryId: string;
+
+  @ApiProperty({ description: 'Category name of the venue' })
+  @Expose()
+  @Transform(({ obj }) => obj.categoryName || 'General Venue')
+  categoryName: string;
+
   @ApiProperty({ description: 'Name of the venue' })
   @Expose()
   name: string;

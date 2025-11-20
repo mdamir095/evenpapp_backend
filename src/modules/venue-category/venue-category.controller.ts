@@ -8,7 +8,7 @@ import { IPagination } from '../../common/interfaces/pagination.interface';
 import { UpdateVenueCategoryStatusDto } from './dto/request/update-venue-category-status.dto';
 
 @ApiTags('Venue Categories')
-@Controller('venue-categories')
+@Controller('venue-category')
 export class VenueCategoryController {
     constructor(private readonly venueCategoryService: VenueCategoryService) {}
 
@@ -18,7 +18,7 @@ export class VenueCategoryController {
     }
 
     @Get()
-      @ApiOperation({ summary: 'Get all venue categories' })
+      @ApiOperation({ summary: 'Get all venue categories filtered by venue-category form type' })
       @ApiQuery({ name: 'page', type: Number, required: true, description: 'Page number' })
       @ApiQuery({ name: 'limit', type: Number, required: true, description: 'Limit number' })
       @ApiQuery({ name: 'search', type: String, required: false, description: 'Search string' })
