@@ -147,10 +147,10 @@ export class ServiceCategoryService {
             preserveNullAndEmptyArrays: false
           }
         },
-        // Filter to only include categories with forms of type 'vendor-service' or 'venue-category'
+        // Filter to only include categories with forms of type 'vendor-service' (exclude venue-category)
         {
           $match: {
-            'formData.type': { $in: ['vendor-service', 'venue-category'] }
+            'formData.type': 'vendor-service'
           }
         },
         // Sort by createdAt descending
