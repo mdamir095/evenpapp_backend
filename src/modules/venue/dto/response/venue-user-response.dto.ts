@@ -56,7 +56,7 @@ export class VenueUserResponseDto {
 
   @ApiProperty({ description: 'Price of the venue' })
   @Expose()
-  @Transform(({ obj }) => obj.price || 150.00)
+  @Transform(({ obj }) => obj.formData?.price || obj.price || 0)
   price: number;
 
   @ApiProperty({ 
@@ -85,6 +85,16 @@ export class VenueUserResponseDto {
 
   @ApiProperty({ description: "URL of the venue's image" })
   @Expose()
-  @Transform(({ obj }) => obj.imageUrl || 'https://t3.ftcdn.net/jpg/05/06/74/32/360_F_506743235_coW6QAlhxlBWjnRk0VNsHqaXGGH9F4JS.jpg')
+  @Transform(({ obj }) => obj.formData?.imageUrl || obj.formData?.images?.[0] || obj.imageUrl || 'https://t3.ftcdn.net/jpg/05/06/74/32/360_F_506743235_coW6QAlhxlBWjnRk0VNsHqaXGGH9F4JS.jpg')
   image: string;
+
+  @ApiProperty({ description: 'Category ID of the venue' })
+  @Expose()
+  @Transform(({ obj }) => obj.categoryId || obj.serviceCategoryId)
+  categoryId: string;
+
+  @ApiProperty({ description: 'Category name of the venue' })
+  @Expose()
+  @Transform(({ obj }) => obj.categoryName || 'General Venue')
+  categoryName: string;
 }

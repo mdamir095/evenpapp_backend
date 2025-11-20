@@ -320,11 +320,94 @@ export class VenueService {
         this.venueRepo.count(query)
       ]);
 
-      // Enrich each venue with location for user listing
+      // Enrich each venue with location and category name for user listing
       const transformedVenues = await Promise.all(venues.map(async (venue) => {
         const storedLocation = await this.locationService.findByServiceId(venue.id?.toString());
+        
+        // Get category name from category table based on categoryId
+        let categoryName = 'General Venue';
+        const venueCategoryId = venue.categoryId;
+        
+        console.log('Looking up category for venue:', venue.id, 'categoryId:', venueCategoryId);
+        
+        if (venueCategoryId && ObjectId.isValid(venueCategoryId)) {
+          try {
+            // Try multiple query methods to find the category
+            let category = await this.categoryRepo.findOneBy({ _id: new ObjectId(venueCategoryId) });
+            
+            // If not found, try with findOne
+            if (!category) {
+              category = await this.categoryRepo.findOne({
+                where: { _id: new ObjectId(venueCategoryId) }
+              });
+            }
+            
+            // If still not found, try with id field
+            if (!category) {
+              category = await this.categoryRepo.findOne({
+                where: { id: venueCategoryId }
+              });
+            }
+            
+            if (category && !category.isDeleted) {
+              categoryName = category.name;
+              console.log('✓ Found category:', categoryName, 'for venue:', venue.id, 'categoryId:', venueCategoryId);
+            } else {
+              console.log('⚠ Category not found or deleted for venue:', venue.id, 'categoryId:', venueCategoryId);
+            }
+          } catch (error) {
+            console.error('❌ Category lookup failed for venue:', venue.id, 'categoryId:', venueCategoryId, 'error:', error);
+          }
+        } else {
+          console.log('⚠ Invalid categoryId for venue:', venue.id, 'categoryId:', venueCategoryId);
+        }
+        
+        // Extract price and imageUrl from formData fields
+        let priceFromFormData = venue.formData?.price || venue.price || 0;
+        let imageUrlFromFormData = venue.formData?.imageUrl || venue.formData?.images?.[0] || venue.imageUrl || '';
+        
+        // Extract from formData.fields if it exists
+        if (venue.formData?.fields && Array.isArray(venue.formData.fields)) {
+          // Find price from fields with "price" in the name
+          const priceField = venue.formData.fields.find((field: any) => 
+            field.name && field.name.toLowerCase().includes('price') && field.actualValue
+          );
+          if (priceField && priceField.actualValue) {
+            // Try to parse as number if it's a string
+            const priceValue = typeof priceField.actualValue === 'string' 
+              ? parseFloat(priceField.actualValue) || 0 
+              : priceField.actualValue;
+            if (priceValue > 0) {
+              priceFromFormData = priceValue;
+            }
+          }
+          
+          // Find image from MultiImageUpload fields
+          const imageField = venue.formData.fields.find((field: any) => 
+            field.type === 'MultiImageUpload' && 
+            field.actualValue && 
+            Array.isArray(field.actualValue) && 
+            field.actualValue.length > 0
+          );
+          if (imageField && imageField.actualValue && imageField.actualValue.length > 0) {
+            const firstImage = imageField.actualValue[0];
+            // Check for url.imageUrl structure
+            if (firstImage.url && firstImage.url.imageUrl) {
+              imageUrlFromFormData = firstImage.url.imageUrl;
+            } else if (typeof firstImage === 'string') {
+              imageUrlFromFormData = firstImage;
+            } else if (firstImage.url) {
+              imageUrlFromFormData = firstImage.url;
+            }
+          }
+        }
+        
         return {
           ...venue,
+          categoryId: venueCategoryId,
+          categoryName: categoryName,
+          price: priceFromFormData,
+          imageUrl: imageUrlFromFormData,
           location: {
             address: storedLocation?.address || venue.formData?.address || venue.formData?.location || 'Address not available',
             city: venue.formData?.city || 'City not available',
@@ -694,21 +777,28 @@ export class VenueService {
     }
 
     try {
-      // Determine enterprise information based on user type (similar to create)
+      // Determine enterprise information
+      // Priority: DTO values (from form-data) > User's enterprise info > Keep existing (undefined)
       let enterpriseId = updateDto.enterpriseId;
       let enterpriseName = updateDto.enterpriseName;
 
-      // Check if user is an enterprise user (has enterpriseId in token)
-      if (user && user.enterpriseId) {
-        // Enterprise user - use their enterprise information
-        enterpriseId = user.enterpriseId;
-        enterpriseName = user.organizationName || updateDto.enterpriseName || 'Unknown Enterprise';
-      } else if (updateDto.enterpriseId === undefined && updateDto.enterpriseName === undefined) {
-        // If no enterprise info provided and user doesn't have it, keep existing values
-        // Don't update enterprise fields if not provided
-        enterpriseId = undefined;
-        enterpriseName = undefined;
+      // If DTO has enterprise info, use it (from form-data)
+      // Otherwise, if user is an enterprise user, use their enterprise information
+      if (enterpriseId === undefined && enterpriseName === undefined) {
+        if (user && user.enterpriseId) {
+          // Enterprise user - use their enterprise information as fallback
+          enterpriseId = user.enterpriseId;
+          enterpriseName = user.organizationName || 'Unknown Enterprise';
+        } else {
+          // If no enterprise info provided and user doesn't have it, keep existing values
+          // Don't update enterprise fields if not provided
+          enterpriseId = undefined;
+          enterpriseName = undefined;
+        }
       }
+      
+      console.log('Enterprise logic - DTO enterpriseId:', updateDto.enterpriseId, 'DTO enterpriseName:', updateDto.enterpriseName);
+      console.log('Enterprise logic - Final enterpriseId:', enterpriseId, 'Final enterpriseName:', enterpriseName);
 
       // Prepare update data, excluding undefined values
       const updateData: any = {
@@ -723,12 +813,30 @@ export class VenueService {
       if (updateDto.serviceCategoryId !== undefined) updateData.categoryId = updateDto.serviceCategoryId;
       if (sanitizedFormData !== undefined) updateData.formData = sanitizedFormData;
       if (updateDto.albums !== undefined) updateData.albums = updateDto.albums;
-      if (enterpriseId !== undefined) updateData.enterpriseId = enterpriseId;
-      if (enterpriseName !== undefined) updateData.enterpriseName = enterpriseName;
       
-      console.log('Enterprise fields - enterpriseId:', enterpriseId, 'enterpriseName:', enterpriseName);
-
+      // Always include enterprise fields if they are provided
+      // Check both the final values and DTO values to ensure we capture them
+      if (enterpriseId !== undefined || updateDto.enterpriseId !== undefined) {
+        const finalEnterpriseId = enterpriseId !== undefined ? enterpriseId : updateDto.enterpriseId;
+        updateData.enterpriseId = finalEnterpriseId === '' ? null : finalEnterpriseId;
+        console.log('Setting enterpriseId in updateData:', updateData.enterpriseId);
+      }
+      if (enterpriseName !== undefined || updateDto.enterpriseName !== undefined) {
+        const finalEnterpriseName = enterpriseName !== undefined ? enterpriseName : updateDto.enterpriseName;
+        updateData.enterpriseName = finalEnterpriseName === '' ? null : finalEnterpriseName;
+        console.log('Setting enterpriseName in updateData:', updateData.enterpriseName);
+      }
+      
+      console.log('=== UPDATE DATA PREPARATION ===');
+      console.log('DTO enterpriseId:', updateDto.enterpriseId, 'type:', typeof updateDto.enterpriseId);
+      console.log('DTO enterpriseName:', updateDto.enterpriseName, 'type:', typeof updateDto.enterpriseName);
+      console.log('Final enterpriseId:', enterpriseId, 'type:', typeof enterpriseId);
+      console.log('Final enterpriseName:', enterpriseName, 'type:', typeof enterpriseName);
+      console.log('UpdateData enterpriseId:', updateData.enterpriseId);
+      console.log('UpdateData enterpriseName:', updateData.enterpriseName);
       console.log('Update data to save:', JSON.stringify(updateData, null, 2));
+      console.log('Update data keys:', Object.keys(updateData));
+      console.log('================================');
 
       await this.venueRepo.updateOne({ _id: new ObjectId(id) }, { $set: updateData });
       return this.findOne(id);

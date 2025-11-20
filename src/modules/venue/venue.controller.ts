@@ -88,7 +88,21 @@ export class VenueController {
   })
   async findAllForUser(@Query() paginationDto: VenuePaginationDto): Promise<VenueUserPaginatedResponseDto> {
     const { data, pagination } = await this.venueService.findAllForUser(paginationDto);
-    return { data: plainToInstance(VenueUserResponseDto, data, { excludeExtraneousValues: true }), pagination };
+    
+    // Transform to DTO and ensure categoryId and categoryName are preserved
+    const transformedData = plainToInstance(VenueUserResponseDto, data, { excludeExtraneousValues: true });
+    
+    // Ensure categoryId and categoryName are included after transformation
+    const finalData = transformedData.map((venue: any, index: number) => {
+      const originalVenue = data[index];
+      return {
+        ...venue,
+        categoryId: originalVenue?.categoryId || venue.categoryId,
+        categoryName: originalVenue?.categoryName || venue.categoryName || 'General Venue'
+      };
+    });
+    
+    return { data: finalData, pagination };
   }
 
 @Get('user/category/:categoryId')
@@ -543,15 +557,18 @@ export class VenueController {
     if (isFormData) {
       console.log('✓ Detected form-data request for update');
       
-      // Extract enterprise fields from raw body
-      if (rawBody.enterpriseId !== undefined && rawBody.enterpriseId !== null && rawBody.enterpriseId !== '') {
-        (updateVenueDto as any).enterpriseId = rawBody.enterpriseId;
-        console.log(`✓ Extracted enterpriseId from form-data:`, rawBody.enterpriseId);
+      // Extract enterprise fields from raw body - ALWAYS extract if present
+      if (rawBody.enterpriseId !== undefined && rawBody.enterpriseId !== null) {
+        (updateVenueDto as any).enterpriseId = rawBody.enterpriseId === '' ? undefined : rawBody.enterpriseId;
+        console.log(`✓ Extracted enterpriseId from form-data:`, rawBody.enterpriseId, '->', (updateVenueDto as any).enterpriseId);
       }
-      if (rawBody.enterpriseName !== undefined && rawBody.enterpriseName !== null && rawBody.enterpriseName !== '') {
-        (updateVenueDto as any).enterpriseName = rawBody.enterpriseName;
-        console.log(`✓ Extracted enterpriseName from form-data:`, rawBody.enterpriseName);
+      if (rawBody.enterpriseName !== undefined && rawBody.enterpriseName !== null) {
+        (updateVenueDto as any).enterpriseName = rawBody.enterpriseName === '' ? undefined : rawBody.enterpriseName;
+        console.log(`✓ Extracted enterpriseName from form-data:`, rawBody.enterpriseName, '->', (updateVenueDto as any).enterpriseName);
       }
+    } else {
+      // For JSON requests, also check if enterprise fields are in the DTO
+      console.log('Request is JSON, checking DTO for enterprise fields');
     }
     
     console.log('Final DTO after processing:', JSON.stringify(updateVenueDto, null, 2));

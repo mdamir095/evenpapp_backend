@@ -88,7 +88,7 @@ export class ServiceCategoryService {
       if (transformedForm && transformedForm.fields && Array.isArray(transformedForm.fields)) {
         transformedForm.fields = transformedForm.fields.map((field: any, index: number) => {
           // Get the original field to preserve actualValue
-          const originalField = form.fields[index];
+          const originalField = form.fields[index] as any;
           if (originalField && originalField.hasOwnProperty('actualValue')) {
             field.actualValue = originalField.actualValue;
           } else if (!field.hasOwnProperty('actualValue')) {
@@ -191,7 +191,7 @@ export class ServiceCategoryService {
             if (transformedForm && transformedForm.fields && Array.isArray(transformedForm.fields)) {
               transformedForm.fields = transformedForm.fields.map((field: any, index: number) => {
                 // Get the original field to preserve actualValue
-                const originalField = form.fields[index];
+                const originalField = form.fields[index] as any;
                 if (originalField && originalField.hasOwnProperty('actualValue')) {
                   field.actualValue = originalField.actualValue;
                 } else if (!field.hasOwnProperty('actualValue')) {
@@ -334,7 +334,7 @@ export class ServiceCategoryService {
           if (transformedForm && transformedForm.fields && Array.isArray(transformedForm.fields)) {
             transformedForm.fields = transformedForm.fields.map((field: any, index: number) => {
               // Get the original field to preserve actualValue
-              const originalField = form.fields[index];
+              const originalField = form.fields[index] as any;
               if (originalField && originalField.hasOwnProperty('actualValue')) {
                 field.actualValue = originalField.actualValue;
               } else if (!field.hasOwnProperty('actualValue')) {
@@ -438,7 +438,7 @@ export class ServiceCategoryService {
       if (transformedForm && transformedForm.fields && Array.isArray(transformedForm.fields)) {
         transformedForm.fields = transformedForm.fields.map((field: any, index: number) => {
           // Get the original field to preserve actualValue
-          const originalField = form.fields[index];
+          const originalField = form.fields[index] as any;
           if (originalField && originalField.hasOwnProperty('actualValue')) {
             field.actualValue = originalField.actualValue;
           } else if (!field.hasOwnProperty('actualValue')) {
