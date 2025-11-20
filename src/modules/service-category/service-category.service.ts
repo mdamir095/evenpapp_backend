@@ -263,131 +263,163 @@ export class ServiceCategoryService {
 
   async findOne(id: string): Promise<ServiceCategoryResponseDto> {
     if (!ObjectId.isValid(id)) {
-          throw new NotFoundException(`Invalid service category id format: ${id}`);
-        }
-        const serviceCategory = await this.repo.findOneBy({
-          _id: new ObjectId(id)
-        });
-    
-        if (!serviceCategory) {
-          throw new NotFoundException(`Service category not found with id: ${id}`);
-        }
+      throw new NotFoundException(`Invalid service category id format: ${id}`);
+    }
 
-        console.log('Service category from DB:', JSON.stringify(serviceCategory, null, 2));
-        console.log('formId value:', serviceCategory.formId);
-        console.log('formId type:', typeof serviceCategory.formId);
-        console.log('formId truthy check:', !!serviceCategory.formId);
-
-        // Fetch form data if formId exists and is not empty
-        let form = null;
-        if (serviceCategory.formId && serviceCategory.formId.trim() !== '') {
-          try {
-            console.log('Looking for form with ID:', serviceCategory.formId);
-            
-            // Validate ObjectId format before querying
-            if (!ObjectId.isValid(serviceCategory.formId)) {
-              console.log('Invalid ObjectId format for formId:', serviceCategory.formId);
-            } else {
-              form = await this.formRepo.findOneBy({
-                _id: new ObjectId(serviceCategory.formId)
-              });
-              console.log('Found form:', form); // Debug log
-              console.log('Form fields:', form?.fields); // Debug log
-              
-              // Add actualValue to each field if it doesn't exist
-              if (form && form.fields && Array.isArray(form.fields)) {
-                form.fields = form.fields.map((field: any) => {
-                  // Always ensure actualValue exists - initialize if missing
-                  // Check if actualValue exists in the database field
-                  const hasActualValue = field.hasOwnProperty('actualValue') && 
-                                        field.actualValue !== null && 
-                                        field.actualValue !== undefined;
-                  
-                  // Initialize or preserve actualValue
-                  if (!hasActualValue) {
-                    // For MultiImageUpload, initialize as empty array
-                    if (field.type === 'MultiImageUpload') {
-                      field.actualValue = [];
-                    } else {
-                      // For other fields, use defaultValue from metadata or empty string
-                      field.actualValue = field.metadata?.defaultValue || '';
-                    }
-                    console.log(`Initialized actualValue for field ${field.name} (${field.type}):`, field.actualValue);
-                  } else {
-                    // actualValue exists in database - preserve it exactly as stored
-                    // This includes empty arrays, empty strings, or actual data
-                    // For MultiImageUpload, ensure it's properly formatted
-                    if (field.type === 'MultiImageUpload') {
-                      // If it's already an array, keep it as is (preserve the structure with URLs)
-                      if (Array.isArray(field.actualValue)) {
-                        // Keep the array structure - it may contain objects with url.imageUrl
-                        // No transformation needed, preserve the exact structure
-                        console.log(`Preserving MultiImageUpload actualValue array with ${field.actualValue.length} items for field ${field.name}`);
-                      } else if (typeof field.actualValue === 'string') {
-                        // If it's a string, try to parse it as JSON
-                        try {
-                          field.actualValue = JSON.parse(field.actualValue);
-                        } catch {
-                          // If parsing fails, wrap in array
-                          field.actualValue = field.actualValue ? [field.actualValue] : [];
-                        }
-                      } else if (field.actualValue === null || field.actualValue === undefined) {
-                        // If it's null or undefined, convert to empty array
-                        field.actualValue = [];
-                      }
-                    } else {
-                      // For text and other field types, preserve the actualValue as is
-                      // Even if it's an empty string, preserve it
-                      console.log(`Preserving actualValue for field ${field.name} (${field.type}):`, field.actualValue);
-                    }
-                  }
-                  
-                  // Ensure actualValue is always present in the response
-                  if (!field.hasOwnProperty('actualValue')) {
-                    field.actualValue = field.type === 'MultiImageUpload' ? [] : '';
-                  }
-                  
-                  return field;
-                });
+    // Use aggregation to join category with forms and filter by form type 'vendor-service'
+    const results = await this.repo
+      .aggregate([
+        { $match: { _id: new ObjectId(id) } },
+        {
+          $addFields: {
+            formIdObj: {
+              $cond: {
+                if: { $and: [{ $ne: ['$formId', null] }, { $ne: ['$formId', ''] }] },
+                then: { $toObjectId: '$formId' },
+                else: null
               }
             }
-          } catch (error) {
-            console.log('Form not found for formId:', serviceCategory.formId);
-            console.log('Error:', error);
+          },
+        },
+        {
+          $lookup: {
+            from: 'forms',
+            localField: 'formIdObj',
+            foreignField: '_id',
+            as: 'formData',
+          },
+        },
+        { 
+          $unwind: { 
+            path: '$formData', 
+            preserveNullAndEmptyArrays: false 
+          } 
+        },
+        // Filter to only include categories with forms of type 'vendor-service'
+        {
+          $match: {
+            'formData.type': 'vendor-service'
+          }
+        },
+        {
+          $addFields: {
+            id: { $toString: '$_id' }
+          }
+        }
+      ])
+      .toArray();
+
+    if (!results.length) {
+      // Check if category exists but form type is wrong
+      const serviceCategory = await this.repo.findOneBy({ _id: new ObjectId(id) });
+      if (!serviceCategory) {
+        throw new NotFoundException(`Service category not found with id: ${id}`);
+      }
+      
+      if (!serviceCategory.formId || serviceCategory.formId.trim() === '') {
+        throw new NotFoundException('Service category does not have a valid formId');
+      }
+
+      // Check if form exists but has wrong type
+      if (ObjectId.isValid(serviceCategory.formId)) {
+        const form = await this.formRepo.findOneBy({ _id: new ObjectId(serviceCategory.formId) });
+        if (!form) {
+          throw new NotFoundException(`Form with ID ${serviceCategory.formId} not found in forms table`);
+        }
+        if (form.type !== 'vendor-service') {
+          throw new NotFoundException(`Service category is linked to a form with type '${form.type}'. Only categories with forms of type 'vendor-service' are allowed.`);
+        }
+      }
+      
+      throw new NotFoundException('Service category not found or does not have a valid vendor-service form');
+    }
+
+    const categoryResult = results[0];
+    let form = categoryResult.formData;
+
+    // Process form fields to add actualValue (similar to findAll)
+    if (form && form.fields && Array.isArray(form.fields)) {
+      form.fields = form.fields.map((field: any) => {
+        // Always ensure actualValue exists - initialize if missing
+        const hasActualValue = field.hasOwnProperty('actualValue') && 
+                              field.actualValue !== null && 
+                              field.actualValue !== undefined;
+        
+        // Initialize or preserve actualValue
+        if (!hasActualValue) {
+          // For MultiImageUpload, initialize as empty array
+          if (field.type === 'MultiImageUpload') {
+            field.actualValue = [];
+          } else {
+            // For other fields, use defaultValue from metadata or empty string
+            field.actualValue = field.metadata?.defaultValue || '';
           }
         } else {
-          console.log('formId is empty or null, skipping form lookup');
-        }
-
-        // Create response object with form data
-        // Ensure actualValue is preserved in fields after transformation
-        let transformedForm = null;
-        if (form) {
-          transformedForm = plainToInstance(FormResponseDto, form, { excludeExtraneousValues: true });
-          // After transformation, ensure actualValue is still present in fields
-          if (transformedForm && transformedForm.fields && Array.isArray(transformedForm.fields)) {
-            transformedForm.fields = transformedForm.fields.map((field: any, index: number) => {
-              // Get the original field to preserve actualValue
-              const originalField = form.fields[index] as any;
-              if (originalField && originalField.hasOwnProperty('actualValue')) {
-                field.actualValue = originalField.actualValue;
-              } else if (!field.hasOwnProperty('actualValue')) {
-                // If actualValue is missing, initialize it
-                field.actualValue = field.type === 'MultiImageUpload' ? [] : '';
+          // actualValue exists in database - preserve it exactly as stored
+          if (field.type === 'MultiImageUpload') {
+            // If it's already an array, keep it as is
+            if (Array.isArray(field.actualValue)) {
+              // Keep the array structure - it may contain objects with url.imageUrl
+            } else if (typeof field.actualValue === 'string') {
+              // If it's a string, try to parse it as JSON
+              try {
+                field.actualValue = JSON.parse(field.actualValue);
+              } catch {
+                // If parsing fails, wrap in array
+                field.actualValue = field.actualValue ? [field.actualValue] : [];
               }
-              return field;
-            });
+            } else if (field.actualValue === null || field.actualValue === undefined) {
+              // If it's null or undefined, convert to empty array
+              field.actualValue = [];
+            }
           }
         }
         
-        const responseData = {
-          ...serviceCategory,
-          form: transformedForm
-        };
+        // Ensure actualValue is always present in the response
+        if (!field.hasOwnProperty('actualValue')) {
+          field.actualValue = field.type === 'MultiImageUpload' ? [] : '';
+        }
+        
+        return field;
+      });
+    }
 
-        return plainToInstance(ServiceCategoryResponseDto, responseData, {
-          excludeExtraneousValues: true,
+    // Transform form to DTO format
+    let transformedForm = null;
+    if (form) {
+      transformedForm = plainToInstance(FormResponseDto, form, { excludeExtraneousValues: true });
+      // After transformation, ensure actualValue is still present in fields
+      if (transformedForm && transformedForm.fields && Array.isArray(transformedForm.fields)) {
+        transformedForm.fields = transformedForm.fields.map((field: any, index: number) => {
+          // Get the original field to preserve actualValue
+          const originalField = form.fields[index] as any;
+          if (originalField && originalField.hasOwnProperty('actualValue')) {
+            field.actualValue = originalField.actualValue;
+          } else if (!field.hasOwnProperty('actualValue')) {
+            // If actualValue is missing, initialize it
+            field.actualValue = field.type === 'MultiImageUpload' ? [] : '';
+          }
+          return field;
         });
+      }
+    }
+
+    // Prepare response with form data
+    const responseData = {
+      id: categoryResult.id,
+      key: categoryResult.key,
+      name: categoryResult.name,
+      description: categoryResult.description,
+      formId: categoryResult.formId,
+      isActive: categoryResult.isActive,
+      createdAt: categoryResult.createdAt,
+      updatedAt: categoryResult.updatedAt,
+      form: transformedForm
+    };
+
+    return plainToInstance(ServiceCategoryResponseDto, responseData, {
+      excludeExtraneousValues: true,
+    });
   }
 
   async update(id: string, dto: UpdateServiceCategoryDto): Promise<ServiceCategoryResponseDto> {
