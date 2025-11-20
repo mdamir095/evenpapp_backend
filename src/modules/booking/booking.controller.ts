@@ -202,17 +202,7 @@ export class BookingController {
     @Req() req: any,
   ): Promise<RequestBookingResponseDto> {
     const userId: string = String(req?.user?.id || req?.user?._id || req?.user?.sub)
-    console.log('Booking Controller - User ID:', userId, 'Type:', typeof userId)
-    console.log('Booking Controller - Incoming referenceImages count:', dto.referenceImages?.length || 0)
-    
     const entity = await this.bookingService.createRequestBooking(dto, userId)
-    
-    // Log service response to see what's being returned
-    console.log('Booking Controller - Service response referenceImages:', (entity as any).referenceImages)
-    console.log('Booking Controller - Service response referenceImages count:', (entity as any).referenceImages?.length || 0)
-    console.log('Booking Controller - Service response keys:', Object.keys(entity as any))
-    console.log('Booking Controller - Service response has referenceImages:', 'referenceImages' in (entity as any))
-    
     // Get referenceImages from entity - ensure it's always an array
     let referenceImages = (entity as any).referenceImages || []
     if (!Array.isArray(referenceImages)) {
@@ -233,10 +223,6 @@ export class BookingController {
     if (!Array.isArray(responseData.referenceImages)) {
       responseData.referenceImages = referenceImages
     }
-    
-    console.log('Booking Controller - Response data referenceImages:', responseData.referenceImages)
-    console.log('Booking Controller - Response data referenceImages count:', responseData.referenceImages?.length || 0)
-    console.log('Booking Controller - Response data has referenceImages:', 'referenceImages' in responseData)
     
     const transformedResponse = plainToInstance(
       RequestBookingResponseDto,
