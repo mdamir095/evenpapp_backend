@@ -1013,6 +1013,11 @@ export class BookingService {
 
     const bookingData = {
       ...booking,
+      eventDate: (booking as any).eventDate ?? null,
+      endDate: (booking as any).endDate ?? null,
+      startTime: (booking as any).startTime ?? null,
+      endTime: (booking as any).endTime ?? null,
+      timeSlot: (booking as any).timeSlot ?? null,
       status: (booking as any).bookingStatus || 'pending',
       categoryType: (booking as any).categoryType || null,
       referenceImages: referenceImages, // Explicitly set filtered referenceImages
