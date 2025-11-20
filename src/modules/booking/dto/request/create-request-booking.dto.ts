@@ -28,23 +28,15 @@ export class CreateRequestBookingDto {
 
 
   @ApiProperty()
-  @IsNotEmpty()
-  @IsDateString()
   eventDate: string;
 
   @ApiProperty()
-  @IsNotEmpty()
-  @IsDateString()
   endDate: string;
 
   @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
   startTime: string;
 
   @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
   endTime: string;
 
   @ApiProperty({ required: false, enum: TimeSlot, enumName: 'TimeSlot' })
