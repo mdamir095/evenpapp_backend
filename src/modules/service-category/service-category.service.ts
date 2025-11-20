@@ -111,107 +111,141 @@ export class ServiceCategoryService {
   async findAll(page: number, limit: number, search: string): Promise<IPagination<ServiceCategoryResponseDto>> {
      const skip = (page - 1) * limit;
   
-      const query: ObjectLiteral = {
-        //isDeleted: false,
-      };
-  
-      if (search) {
-        query.name = { $regex: new RegExp(search, 'i') }; // case-insensitive search
-      }
-
-         // Fetch total count first
-      const total = await this.repo.count(query);
-  
-      // Fetch paginated data
-      const serviceCategories = await this.repo.find({
-        where: query,
-        skip,
-        take: limit,
-        order: { createdAt: 'desc' },
-      });
-
-      // Fetch form data for each category
-      const serviceCategoriesWithForms = await Promise.all(
-        serviceCategories.map(async (category) => {
-          let form = null;
-          if (category.formId && category.formId.trim() !== '') {
-            try {
-              if (ObjectId.isValid(category.formId)) {
-                form = await this.formRepo.findOneBy({
-                  _id: new ObjectId(category.formId)
-                });
-                console.log('Found form for category:', category.name, form); // Debug log
-                
-                // Add actualValue to each field if it doesn't exist
-                if (form && form.fields && Array.isArray(form.fields)) {
-                  form.fields = form.fields.map((field: any) => {
-                    // Only initialize actualValue if it doesn't exist
-                    // Preserve existing actualValue from database (especially for MultiImageUpload with URLs)
-                    if (!field.hasOwnProperty('actualValue')) {
-                      // For MultiImageUpload, initialize as empty array
-                      if (field.type === 'MultiImageUpload') {
-                        field.actualValue = [];
-                      } else {
-                        // For other fields, use defaultValue from metadata or empty string
-                        field.actualValue = field.metadata?.defaultValue || '';
-                      }
-                    } else {
-                      // actualValue exists - preserve it (could be URLs for MultiImageUpload)
-                      // For MultiImageUpload, ensure it's an array
-                      if (field.type === 'MultiImageUpload' && !Array.isArray(field.actualValue)) {
-                        // If it's a string, try to parse it or convert to array
-                        if (typeof field.actualValue === 'string') {
-                          try {
-                            field.actualValue = JSON.parse(field.actualValue);
-                          } catch {
-                            // If parsing fails, wrap in array
-                            field.actualValue = field.actualValue ? [field.actualValue] : [];
-                          }
-                        } else {
-                          field.actualValue = [];
-                        }
-                      }
-                    }
-                    return field;
-                  });
-                }
-              } else {
-                console.log('Invalid ObjectId format for formId:', category.formId);
+      // Build aggregation pipeline to join categories with forms and filter by form type 'vendor-service'
+      const pipeline: any[] = [
+        // Match categories (optionally filter by search)
+        {
+          $match: {
+            ...(search ? { name: { $regex: search, $options: 'i' } } : {})
+          }
+        },
+        // Convert formId to ObjectId for lookup
+        {
+          $addFields: {
+            formIdObj: {
+              $cond: {
+                if: { $and: [{ $ne: ['$formId', null] }, { $ne: ['$formId', ''] }] },
+                then: { $toObjectId: '$formId' },
+                else: null
               }
-            } catch (error) {
-              console.log('Form not found for formId:', category.formId);
-              console.log('Error:', error);
             }
           }
-          // Ensure actualValue is preserved in fields after transformation
-          let transformedForm = null;
-          if (form) {
-            transformedForm = plainToInstance(FormResponseDto, form, { excludeExtraneousValues: true });
-            // After transformation, ensure actualValue is still present in fields
-            if (transformedForm && transformedForm.fields && Array.isArray(transformedForm.fields)) {
-              transformedForm.fields = transformedForm.fields.map((field: any, index: number) => {
-                // Get the original field to preserve actualValue
-                const originalField = form.fields[index] as any;
-                if (originalField && originalField.hasOwnProperty('actualValue')) {
-                  field.actualValue = originalField.actualValue;
-                } else if (!field.hasOwnProperty('actualValue')) {
-                  // If actualValue is missing, initialize it
-                  field.actualValue = field.type === 'MultiImageUpload' ? [] : '';
-                }
-                return field;
-              });
-            }
+        },
+        // Join with forms collection
+        {
+          $lookup: {
+            from: 'forms',
+            localField: 'formIdObj',
+            foreignField: '_id',
+            as: 'formData'
           }
-          
-          return {
-            ...category,
-            form: transformedForm
-          };
-        })
+        },
+        // Unwind form data (only keep categories that have a form)
+        {
+          $unwind: {
+            path: '$formData',
+            preserveNullAndEmptyArrays: false
+          }
+        },
+        // Filter to only include categories with forms of type 'vendor-service'
+        {
+          $match: {
+            'formData.type': 'vendor-service'
+          }
+        },
+        // Sort by createdAt descending
+        {
+          $sort: { createdAt: -1 }
+        }
+      ];
+
+      // Get total count (before pagination)
+      const countPipeline = [...pipeline, { $count: 'total' }];
+      const countResult = await this.repo.aggregate(countPipeline).toArray();
+      const total = countResult.length > 0 ? countResult[0].total : 0;
+
+      // Add pagination
+      pipeline.push(
+        { $skip: skip },
+        { $limit: limit }
       );
 
-            // Transform to response DTO
-      const data = plainToInstance(ServiceCategoryResponseDto, serviceCategoriesWithForms, {
+      // Execute aggregation
+      const serviceCategoriesWithForms = await this.repo.aggregate(pipeline).toArray();
+
+      // Process form fields to add actualValue
+      const processedCategories = serviceCategoriesWithForms.map((category: any) => {
+        let form = category.formData;
+        
+        if (form && form.fields && Array.isArray(form.fields)) {
+          form.fields = form.fields.map((field: any) => {
+            // Only initialize actualValue if it doesn't exist
+            // Preserve existing actualValue from database (especially for MultiImageUpload with URLs)
+            if (!field.hasOwnProperty('actualValue')) {
+              // For MultiImageUpload, initialize as empty array
+              if (field.type === 'MultiImageUpload') {
+                field.actualValue = [];
+              } else {
+                // For other fields, use defaultValue from metadata or empty string
+                field.actualValue = field.metadata?.defaultValue || '';
+              }
+            } else {
+              // actualValue exists - preserve it (could be URLs for MultiImageUpload)
+              // For MultiImageUpload, ensure it's an array
+              if (field.type === 'MultiImageUpload' && !Array.isArray(field.actualValue)) {
+                // If it's a string, try to parse it or convert to array
+                if (typeof field.actualValue === 'string') {
+                  try {
+                    field.actualValue = JSON.parse(field.actualValue);
+                  } catch {
+                    // If parsing fails, wrap in array
+                    field.actualValue = field.actualValue ? [field.actualValue] : [];
+                  }
+                } else {
+                  field.actualValue = [];
+                }
+              }
+            }
+            return field;
+          });
+        }
+
+        // Transform form to DTO format
+        let transformedForm = null;
+        if (form) {
+          transformedForm = plainToInstance(FormResponseDto, form, { excludeExtraneousValues: true });
+          // After transformation, ensure actualValue is still present in fields
+          if (transformedForm && transformedForm.fields && Array.isArray(transformedForm.fields)) {
+            transformedForm.fields = transformedForm.fields.map((field: any, index: number) => {
+              // Get the original field to preserve actualValue
+              const originalField = form.fields[index] as any;
+              if (originalField && originalField.hasOwnProperty('actualValue')) {
+                field.actualValue = originalField.actualValue;
+              } else if (!field.hasOwnProperty('actualValue')) {
+                // If actualValue is missing, initialize it
+                field.actualValue = field.type === 'MultiImageUpload' ? [] : '';
+              }
+              return field;
+            });
+          }
+        }
+
+        // Convert _id to id string and prepare response
+        return {
+          id: category._id.toString(),
+          key: category.key,
+          name: category.name,
+          description: category.description,
+          formId: category.formId,
+          form: transformedForm,
+          isActive: category.isActive,
+          createdAt: category.createdAt,
+          updatedAt: category.updatedAt
+        };
+      });
+
+      // Transform to response DTO
+      const data = plainToInstance(ServiceCategoryResponseDto, processedCategories, {
         excludeExtraneousValues: true,
       });
       const pagination: IPaginationMeta = {

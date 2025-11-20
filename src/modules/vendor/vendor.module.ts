@@ -5,11 +5,12 @@ import { VendorController } from './vendor.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../user/entities/user.entity';
 import { RatingModule } from '@modules/rating/rating.module';
-import { ServiceCategory } from '../service-category/entity/service-category.entity';
+import { VendorCategory } from '../vendor-category/entity/vendor-category.entity';
+import { Form } from '../form/entity/form.entity';
 import { forwardRef } from '@nestjs/common';
 import { LocationModule } from '@modules/location/location.module';
 @Module({
-    imports: [TypeOrmModule.forFeature([Vendor, ServiceCategory, User ], 'mongo'),
+    imports: [TypeOrmModule.forFeature([Vendor, VendorCategory, User, Form ], 'mongo'),
     forwardRef(() => RatingModule), LocationModule],
     controllers: [VendorController],
     providers: [VendorService],

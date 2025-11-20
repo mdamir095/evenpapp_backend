@@ -6,7 +6,8 @@ import { plainToInstance } from 'class-transformer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { Vendor } from './entity/vendor.entity';
-import { ServiceCategory } from '../service-category/entity/service-category.entity';
+import { VendorCategory } from '../vendor-category/entity/vendor-category.entity';
+import { Form } from '../form/entity/form.entity';
 import { CreateVendorDto } from './dto/request/create-vendor.dto';
 import { UpdateVendorDto } from './dto/request/update-vendor.dto';
 import { VendorResponseDto } from './dto/response/vendor-response.dto';
@@ -26,7 +27,8 @@ export class VendorService {
     @InjectRepository(Vendor, 'mongo') private readonly vendorRepo: MongoRepository<Vendor>,
     @InjectRepository(Rating, 'mongo') private readonly ratingRepo: MongoRepository<Rating>, // Injected
     @InjectRepository(User, 'mongo') private readonly userRepo: MongoRepository<User>,
-    @InjectRepository(ServiceCategory, 'mongo') private readonly categoryRepo: MongoRepository<ServiceCategory>,
+    @InjectRepository(VendorCategory, 'mongo') private readonly categoryRepo: MongoRepository<VendorCategory>,
+    @InjectRepository(Form, 'mongo') private readonly formRepo: MongoRepository<Form>,
     private readonly locationService: LocationService,
   ) {}
 
@@ -457,6 +459,78 @@ export class VendorService {
 
 
   async findByCategory(categoryId: string, paginationDto: VendorPaginationDto): Promise<VendorPaginatedResponseDto> {
+    // Validate categoryId format
+    if (!ObjectId.isValid(categoryId)) {
+      throw new BadRequestException('Invalid category ID format');
+    }
+
+    // Use aggregation to join category with forms table and filter by form type 'vendor-service'
+    const categoryWithForm = await this.categoryRepo
+      .aggregate([
+        { 
+          $match: { 
+            _id: new ObjectId(categoryId),
+            isDeleted: false
+          } 
+        },
+        {
+          $addFields: {
+            formIdObj: { $toObjectId: "$formId" }
+          }
+        },
+        {
+          $lookup: {
+            from: "forms",
+            localField: "formIdObj",
+            foreignField: "_id",
+            as: "formData"
+          }
+        },
+        { 
+          $unwind: { 
+            path: "$formData", 
+            preserveNullAndEmptyArrays: false 
+          } 
+        },
+        {
+          $match: {
+            "formData.type": "vendor-service"
+          }
+        },
+        {
+          $addFields: { 
+            id: { $toString: "$_id" } 
+          }
+        }
+      ])
+      .toArray();
+
+    if (!categoryWithForm || categoryWithForm.length === 0) {
+      // Check if category exists but form type is wrong
+      const category = await this.categoryRepo.findOneBy({ _id: new ObjectId(categoryId) });
+      if (!category || category.isDeleted) {
+        throw new NotFoundException('Category not found');
+      }
+      
+      if (!category.formId || category.formId.trim() === '') {
+        throw new BadRequestException('Category does not have a valid formId');
+      }
+
+      // Check if form exists but has wrong type
+      if (ObjectId.isValid(category.formId)) {
+        const form = await this.formRepo.findOneBy({ _id: new ObjectId(category.formId) });
+        if (!form) {
+          throw new NotFoundException(`Form with ID ${category.formId} not found in forms table`);
+        }
+        if (form.type !== 'vendor-service') {
+          throw new BadRequestException(`Category is linked to a form with type '${form.type}'. Only categories with forms of type 'vendor-service' are allowed for vendors.`);
+        }
+      }
+      
+      throw new NotFoundException('Category not found or does not have a valid vendor-service form');
+    }
+
+    // Now filter vendors by this categoryId
     const updatedPaginationDto = { ...paginationDto, categoryId };
     return this.findAll(updatedPaginationDto);
   }
