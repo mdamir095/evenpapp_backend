@@ -179,46 +179,76 @@ export class VendorService {
       );
     }
   
-    // Price filtering
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      const priceConditions = [];
-  
-      if (minPrice !== undefined) {
-        priceConditions.push(
-          { 'formData.pricing.starting': { $gte: minPrice } },
-          { 'formData.pricing': { $gte: minPrice } }
-        );
-      }
-  
-      if (maxPrice !== undefined) {
-        priceConditions.push(
-          { 'formData.pricing.starting': { $lte: maxPrice } },
-          { 'formData.pricing': { $lte: maxPrice } }
-        );
-      }
-  
-      if (priceConditions.length > 0) {
-        searchConditions.push(...priceConditions);
-      }
-    }
-  
+    // Note: Price filtering will be done after extracting price from formData
+    // This is because price can be stored in multiple places: vendor.price, formData.price, formData.fields array
     if (searchConditions.length > 0) {
       query.$or = searchConditions;
     }
-  
-    try {
-      const [vendors, total] = await Promise.all([
-        this.vendorRepo.find({
-          where: query,
-          skip,
-          take: limit,
-          order: { createdAt: 'DESC' },
-        }),
-        this.vendorRepo.count(query),
-      ]);
 
+    try {
+      // Fetch all vendors matching the query (without price filtering and pagination)
+      // We'll filter by price after extracting it from formData
+      const allVendors = await this.vendorRepo.find({
+        where: query,
+        order: { createdAt: 'DESC' },
+      });
+
+      // Helper function to extract price from formData (matches the logic in VendorUserResponseDto)
+      const extractPriceFromFormData = (vendor: any): number => {
+        // Priority: vendor.price > formData.price > formData.fields array (fields with "price" in name) > 0
+        if (vendor.price !== undefined && vendor.price !== null && vendor.price > 0) {
+          return vendor.price;
+        }
+        
+        if (vendor.formData?.price !== undefined && vendor.formData?.price !== null && vendor.formData.price > 0) {
+          return vendor.formData.price;
+        }
+        
+        // Check formData.fields array for fields with "price" in the name
+        if (vendor.formData?.fields && Array.isArray(vendor.formData.fields)) {
+          const priceField = vendor.formData.fields.find((field: any) => {
+            const fieldName = field?.name?.toLowerCase() || '';
+            const hasPriceInName = fieldName.includes('price');
+            const hasActualValue = field?.actualValue !== undefined && field?.actualValue !== null && field?.actualValue !== '';
+            return hasPriceInName && hasActualValue;
+          });
+          
+          if (priceField && priceField.actualValue !== undefined && priceField.actualValue !== null) {
+            const priceValue = typeof priceField.actualValue === 'string' 
+              ? parseFloat(priceField.actualValue) 
+              : typeof priceField.actualValue === 'number' 
+                ? priceField.actualValue 
+                : 0;
+            if (!isNaN(priceValue) && priceValue > 0) {
+              return priceValue;
+            }
+          }
+          
+          // Also check for direct Price field (capital P)
+          if (vendor.formData.fields.Price) {
+            const fieldsPrice = parseFloat(vendor.formData.fields.Price);
+            if (!isNaN(fieldsPrice) && fieldsPrice > 0) {
+              return fieldsPrice;
+            }
+          }
+        }
+        
+        // Check formData.pricing.starting
+        if (vendor.formData?.pricing?.starting && typeof vendor.formData.pricing.starting === 'number') {
+          return vendor.formData.pricing.starting;
+        }
+        
+        // Check formData.pricing as a number
+        if (vendor.formData?.pricing && typeof vendor.formData.pricing === 'number' && vendor.formData.pricing > 0) {
+          return vendor.formData.pricing;
+        }
+        
+        return 0;
+      };
+
+      // Populate vendors with category and location data, and extract price
       const populatedVendors = await Promise.all(
-        vendors.map(async (vendor) => {
+        allVendors.map(async (vendor) => {
           const storedLocation = await this.locationService.findByServiceId(vendor.id?.toString());
           
           // Get category name from categories collection (ServiceCategory) based on categoryId
@@ -290,6 +320,9 @@ export class VendorService {
           // Generate category-specific pricing
           const categoryPricing = CategoryPricingHelper.generateCategoryPricing(categoryName);
           
+          // Extract price from formData
+          const extractedPrice = extractPriceFromFormData(vendor);
+          
           // Extract image URL from vendor formData (similar to venue listing endpoints)
           // Priority: formData.fields (MultiImageUpload) > formData.imageUrl > formData.images[0] > vendor.imageUrl
           let imageUrlFromFormData = '';
@@ -350,8 +383,8 @@ export class VendorService {
             ...vendor, 
             categoryId: vendorCategoryId,
             categoryName: categoryName,
-            // Ensure price is included from vendor data (original price from DB)
-            price: vendor.price || vendor.formData?.price || (vendor.formData?.fields?.Price ? parseFloat(vendor.formData.fields.Price) : undefined) || 0,
+            // Use extracted price from formData
+            price: extractedPrice,
             // Set the extracted image URL (no hardcoded fallback)
             imageUrl: imageUrlFromFormData,
             location: {
@@ -366,13 +399,28 @@ export class VendorService {
           };
         })
       );
-      const data = plainToInstance(VendorResponseDto, populatedVendors, {
+
+      // Filter by price range if minPrice or maxPrice is specified
+      let filteredVendors = populatedVendors;
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        filteredVendors = populatedVendors.filter((vendor) => {
+          const vendorPrice = vendor.price || 0;
+          const meetsMinPrice = minPrice === undefined || vendorPrice >= minPrice;
+          const meetsMaxPrice = maxPrice === undefined || vendorPrice <= maxPrice;
+          return meetsMinPrice && meetsMaxPrice;
+        });
+      }
+
+      // Apply pagination to filtered results
+      const total = filteredVendors.length;
+      const paginatedVendors = filteredVendors.slice(skip, skip + limit);
+      const data = plainToInstance(VendorResponseDto, paginatedVendors, {
         excludeExtraneousValues: true,
       });
       
       // Explicitly ensure categoryId, categoryName, and imageUrl are present after transformation
       const finalData = data.map((vendorDto: any, index: number) => {
-        const originalVendor = populatedVendors[index];
+        const originalVendor = paginatedVendors[index];
         if (originalVendor) {
           vendorDto.categoryId = originalVendor.categoryId;
           vendorDto.categoryName = originalVendor.categoryName;
