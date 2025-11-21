@@ -78,18 +78,20 @@ export class LocationController {
   }
   
   @Get('nearby/search')
-  @ApiOperation({ summary: 'Find nearby vendors/venues by coordinates' })
+  @ApiOperation({ summary: 'Find nearby vendors/venues by coordinates (defaults to vendors only)' })
   @ApiQuery({ name: 'lng', type: Number })
   @ApiQuery({ name: 'lat', type: Number })
   @ApiQuery({ name: 'radius', type: Number, required: false, description: 'Meters', example: 5000 })
-  @ApiQuery({ name: 'type', type: String, required: false, description: 'vendor | venue' })
+  @ApiQuery({ name: 'type', type: String, required: false, description: 'vendor (default) | venue', enum: ['vendor', 'venue'] })
   findNearby(
     @Query('lng') lng: string,
     @Query('lat') lat: string,
     @Query('radius') radius?: string,
     @Query('type') type?: 'vendor' | 'venue',
   ) {
-    return this.service.findNearby(parseFloat(lng), parseFloat(lat), radius ? parseInt(radius, 10) : 5000, type);
+    // Default to 'vendor' if type is not specified - only return vendor services
+    const searchType = type || 'vendor';
+    return this.service.findNearby(parseFloat(lng), parseFloat(lat), radius ? parseInt(radius, 10) : 5000, searchType);
   }
 }
 

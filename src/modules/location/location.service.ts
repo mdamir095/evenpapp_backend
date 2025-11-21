@@ -179,8 +179,11 @@ export class LocationService {
       let vendorsWithCoords = 0;
       let vendorsInRadius = 0;
 
-      // Query vendors if type is not specified or is 'vendor'
-      if (!type || type === 'vendor') {
+      // Default to 'vendor' if type is not specified - only return vendor services
+      const searchType = type || 'vendor';
+
+      // Query vendors if type is 'vendor' (default)
+      if (searchType === 'vendor') {
         const vendors = await this.vendorRepo.find({
           where: { isDeleted: false }
         });
@@ -233,8 +236,8 @@ export class LocationService {
         }
       }
 
-      // Query venues if type is not specified or is 'venue'
-      if (!type || type === 'venue') {
+      // Query venues only if type is explicitly 'venue'
+      if (searchType === 'venue') {
         const venues = await this.venueRepo.find({
           where: { isDeleted: false }
         });
@@ -296,7 +299,7 @@ export class LocationService {
           totalVendors,
           vendorsWithCoords,
           vendorsInRadius,
-          searchParams: { lng, lat, radiusMeters, type }
+          searchParams: { lng, lat, radiusMeters, type: searchType }
         }
       };
     } catch (error) {
