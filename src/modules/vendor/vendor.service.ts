@@ -868,6 +868,18 @@ export class VendorService {
     if (updateDto.formData) {
       VendorFormValidator.validateFormData(updateDto.formData);
       sanitizedFormData = VendorFormValidator.sanitizeFormData(updateDto.formData);
+      
+      // Merge with existing formData to preserve other fields
+      // Only update the specific fields that are being changed
+      const existingFormData = existingVendor.formData || {};
+      sanitizedFormData = {
+        ...existingFormData,
+        ...sanitizedFormData,
+        // Deep merge for nested objects like fields array
+        ...(sanitizedFormData.fields && {
+          fields: sanitizedFormData.fields // Use new fields if provided
+        })
+      };
     }
 
     try {
@@ -878,7 +890,21 @@ export class VendorService {
         updatedAt: new Date()
       };
 
-      await this.vendorRepo.updateOne({ _id: new ObjectId(id) }, { $set: updateData });
+      // Ensure we're only updating the specific record by ID
+      console.log('Updating vendor with ID:', id);
+      console.log('Update filter:', { _id: new ObjectId(id) });
+      
+      const updateResult = await this.vendorRepo.updateOne({ _id: new ObjectId(id) }, { $set: updateData });
+      console.log('Update result - matchedCount:', updateResult.matchedCount, 'modifiedCount:', updateResult.modifiedCount);
+      
+      if (updateResult.matchedCount === 0) {
+        throw new NotFoundException('Vendor not found for update');
+      }
+      
+      if (updateResult.matchedCount > 1) {
+        console.error('WARNING: Multiple vendors matched the update filter! This should not happen.');
+      }
+      
       return this.findOne(id);
     } catch (error) {
       throw new BadRequestException('Failed to update vendor');

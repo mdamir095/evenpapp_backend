@@ -601,15 +601,118 @@ export class BookingService {
         (where as any).venueId = { $in: filteredVenueIds };
       }
 
-      const bookings = await this.bookingRepo.findAndCount({
+      // Fetch all bookings matching the query (without pagination)
+      // We'll filter by price after extracting it from formData, then apply pagination
+      const allBookings = await this.bookingRepo.find({
         where,
-        skip: (page - 1) * limit,
-        take: limit,
         order: { createdAt: 'DESC' },
       });
 
+      console.log('findAllForUser - Total bookings found:', allBookings.length);
+
+      // Helper function to extract price from formData (for vendors, matches vendor service logic)
+      // Priority: formData.fields (field name is "price") > vendor.price > formData.price > other formData locations
+      const extractPriceFromFormData = (venueOrVendor: any): number => {
+        if (!venueOrVendor) {
+          console.log('extractPriceFromFormData: venueOrVendor is null/undefined');
+          return 0;
+        }
+        
+        // Debug logging
+        console.log('extractPriceFromFormData - vendor data:', {
+          id: venueOrVendor.id,
+          name: venueOrVendor.name,
+          price: venueOrVendor.price,
+          formDataPrice: venueOrVendor.formData?.price,
+          hasFormDataFields: !!venueOrVendor.formData?.fields,
+          isFieldsArray: Array.isArray(venueOrVendor.formData?.fields),
+          fieldsLength: Array.isArray(venueOrVendor.formData?.fields) ? venueOrVendor.formData.fields.length : 0
+        });
+        
+        // PRIORITY 1: Check formData.fields array for field with name exactly "price" (case-insensitive)
+        if (venueOrVendor.formData?.fields && Array.isArray(venueOrVendor.formData.fields)) {
+          // First, try to find field with name exactly "price" (case-insensitive)
+          const priceField = venueOrVendor.formData.fields.find((field: any) => {
+            const fieldName = field?.name?.toLowerCase() || '';
+            const isExactPriceField = fieldName === 'price';
+            const hasActualValue = field?.actualValue !== undefined && field?.actualValue !== null && field?.actualValue !== '';
+            return isExactPriceField && hasActualValue;
+          });
+          
+          if (priceField && priceField.actualValue !== undefined && priceField.actualValue !== null) {
+            const priceValue = typeof priceField.actualValue === 'string' 
+              ? parseFloat(priceField.actualValue) 
+              : typeof priceField.actualValue === 'number' 
+                ? priceField.actualValue 
+                : 0;
+            if (!isNaN(priceValue) && priceValue >= 0) {
+              console.log('extractPriceFromFormData: Using price from formData.fields (exact "price" field):', priceValue);
+              return priceValue;
+            }
+          }
+          
+          // If exact "price" field not found, try fields with "price" in the name (case insensitive)
+          const priceFieldWithName = venueOrVendor.formData.fields.find((field: any) => {
+            const fieldName = field?.name?.toLowerCase() || '';
+            const hasPriceInName = fieldName.includes('price');
+            const hasActualValue = field?.actualValue !== undefined && field?.actualValue !== null && field?.actualValue !== '';
+            return hasPriceInName && hasActualValue;
+          });
+          
+          if (priceFieldWithName && priceFieldWithName.actualValue !== undefined && priceFieldWithName.actualValue !== null) {
+            const priceValue = typeof priceFieldWithName.actualValue === 'string' 
+              ? parseFloat(priceFieldWithName.actualValue) 
+              : typeof priceFieldWithName.actualValue === 'number' 
+                ? priceFieldWithName.actualValue 
+                : 0;
+            if (!isNaN(priceValue) && priceValue >= 0) {
+              console.log('extractPriceFromFormData: Using price from formData.fields (field with "price" in name):', priceValue);
+              return priceValue;
+            }
+          }
+          
+          // Also check for direct Price field (capital P) - fields might be an object too
+          if (venueOrVendor.formData.fields.Price) {
+            const fieldsPrice = parseFloat(venueOrVendor.formData.fields.Price);
+            if (!isNaN(fieldsPrice) && fieldsPrice >= 0) {
+              console.log('extractPriceFromFormData: Using formData.fields.Price:', fieldsPrice);
+              return fieldsPrice;
+            }
+          }
+        }
+        
+        // PRIORITY 2: Check vendor.price (direct field)
+        if (venueOrVendor.price !== undefined && venueOrVendor.price !== null && venueOrVendor.price >= 0) {
+          console.log('extractPriceFromFormData: Using vendor.price:', venueOrVendor.price);
+          return venueOrVendor.price;
+        }
+        
+        // PRIORITY 3: Check formData.price (direct field in formData)
+        if (venueOrVendor.formData?.price !== undefined && venueOrVendor.formData?.price !== null && venueOrVendor.formData.price >= 0) {
+          console.log('extractPriceFromFormData: Using formData.price:', venueOrVendor.formData.price);
+          return venueOrVendor.formData.price;
+        }
+        
+        // PRIORITY 4: Check formData.pricing.starting
+        if (venueOrVendor.formData?.pricing?.starting && typeof venueOrVendor.formData.pricing.starting === 'number' && venueOrVendor.formData.pricing.starting >= 0) {
+          console.log('extractPriceFromFormData: Using formData.pricing.starting:', venueOrVendor.formData.pricing.starting);
+          return venueOrVendor.formData.pricing.starting;
+        }
+        
+        // PRIORITY 5: Check formData.pricing as a number
+        if (venueOrVendor.formData?.pricing && typeof venueOrVendor.formData.pricing === 'number' && venueOrVendor.formData.pricing >= 0) {
+          console.log('extractPriceFromFormData: Using formData.pricing (direct number):', venueOrVendor.formData.pricing);
+          return venueOrVendor.formData.pricing;
+        }
+        
+        // Fallback to calculatePriceFromPricing method
+        const calculatedPrice = this.calculatePriceFromPricing(venueOrVendor);
+        console.log('extractPriceFromFormData: Using calculatePriceFromPricing fallback:', calculatedPrice);
+        return calculatedPrice;
+      };
+
       const bookingsWithVenues = await Promise.all(
-        bookings[0]?.map(async (booking) => {
+        allBookings?.map(async (booking: any) => {
           let venueOrVendor = null;
           let user = null;
           
@@ -735,8 +838,26 @@ export class BookingService {
               } else if ((booking as any).bookingType === 'vendor') {
                 console.log('Querying vendor with venueId:', venueId);
                 // Try multiple query methods to find the vendor (consistent approach)
+                // Ensure formData is explicitly included in the query
                 let vendor = await this.vendorRepo.findOne({
                   where: { _id: venueId, isDeleted: false } as any,
+                  // Explicitly select formData to ensure it's loaded
+                  select: {
+                    _id: true,
+                    id: true,
+                    name: true,
+                    title: true,
+                    price: true,
+                    categoryId: true,
+                    formData: true, // Explicitly select formData
+                    imageUrl: true,
+                    averageRating: true,
+                    totalRatings: true,
+                    description: true,
+                    longDescription: true,
+                    isDeleted: true,
+                    isActive: true,
+                  } as any,
                 });
                 
                 // If not found, try with findOneBy
@@ -748,19 +869,43 @@ export class BookingService {
                 if (!vendor) {
                   vendor = await this.vendorRepo.findOne({
                     where: { id: venueId.toString(), isDeleted: false } as any,
+                    // Explicitly select formData to ensure it's loaded
+                    select: {
+                      _id: true,
+                      id: true,
+                      name: true,
+                      title: true,
+                      price: true,
+                      categoryId: true,
+                      formData: true, // Explicitly select formData
+                      imageUrl: true,
+                      averageRating: true,
+                      totalRatings: true,
+                      description: true,
+                      longDescription: true,
+                      isDeleted: true,
+                      isActive: true,
+                    } as any,
                   });
                 }
                 
                 venueOrVendor = vendor;
                 
-                // Debug vendor data
+                // Debug vendor data - log formData structure
                 console.log('Fetched vendor data:', {
                   id: venueOrVendor?.id,
                   name: venueOrVendor?.name,
                   title: venueOrVendor?.title,
                   price: venueOrVendor?.price,
                   categoryId: venueOrVendor?.categoryId,
-                  formData: venueOrVendor?.formData
+                  hasFormData: !!venueOrVendor?.formData,
+                  formDataPrice: venueOrVendor?.formData?.price,
+                  hasFormDataFields: !!venueOrVendor?.formData?.fields,
+                  isFieldsArray: Array.isArray(venueOrVendor?.formData?.fields),
+                  fieldsCount: Array.isArray(venueOrVendor?.formData?.fields) ? venueOrVendor.formData.fields.length : 0,
+                  formDataFieldsSample: Array.isArray(venueOrVendor?.formData?.fields) 
+                    ? venueOrVendor.formData.fields.slice(0, 3).map((f: any) => ({ name: f?.name, type: f?.type, hasActualValue: !!f?.actualValue }))
+                    : null
                 });
                 
                 if (!venueOrVendor) {
@@ -889,7 +1034,7 @@ export class BookingService {
               pinTitle: venueOrVendor?.formData?.pinTitle || venueOrVendor?.name || venueOrVendor?.title,
               mapImageUrl: venueOrVendor?.formData?.mapImageUrl || 'https://maps.googleapis.com/...'
             },
-            price: this.calculatePriceFromPricing(venueOrVendor),
+            price: extractPriceFromFormData(venueOrVendor),
             pricing: (venueOrVendor as any)?.pricing || venueOrVendor?.formData?.pricing || [], // Add pricing array from venue or formData
             status: (booking as any).bookingStatus || 'pending', // Add booking status
             rating: venueOrVendor?.averageRating || 0,
@@ -902,7 +1047,7 @@ export class BookingService {
             serviceName: venueOrVendor?.title || venueOrVendor?.name || 'Unknown Service',
             startDateTime: (booking as any).eventDate || (booking as any).startTime || new Date().toISOString(),
             endDateTime: (booking as any).endDate || (booking as any).endTime || new Date().toISOString(),
-            amount: this.calculatePriceFromPricing(venueOrVendor),
+            amount: extractPriceFromFormData(venueOrVendor),
             bookingNumber: (booking as any).bookingId || (booking as any).id || 'Unknown',
             // User information
             userName: user?.firstName + ' ' + user?.lastName || 'Unknown User',
@@ -910,9 +1055,14 @@ export class BookingService {
           };
         }),
       );
+      // Apply pagination to results
+      const total = bookingsWithVenues.length;
+      const skip = (page - 1) * limit;
+      const paginatedBookings = bookingsWithVenues.slice(skip, skip + limit);
+
       return {
-        bookings: bookingsWithVenues,
-        total: bookings[1] || 0,
+        bookings: paginatedBookings,
+        total,
         page,
         limit,
       };

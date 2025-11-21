@@ -825,6 +825,18 @@ export class VenueService {
       
       VenueFormValidator.validateFormData(formDataObj);
       sanitizedFormData = VenueFormValidator.sanitizeFormData(formDataObj);
+      
+      // Merge with existing formData to preserve other fields
+      // Only update the specific fields that are being changed
+      const existingFormData = existingVenue.formData || {};
+      sanitizedFormData = {
+        ...existingFormData,
+        ...sanitizedFormData,
+        // Deep merge for nested objects like fields array
+        ...(sanitizedFormData.fields && {
+          fields: sanitizedFormData.fields // Use new fields if provided
+        })
+      };
     }
 
     try {
@@ -893,9 +905,21 @@ export class VenueService {
       console.log('UpdateData enterpriseName:', updateData.enterpriseName);
       console.log('Update data to save:', JSON.stringify(updateData, null, 2));
       console.log('Update data keys:', Object.keys(updateData));
+      console.log('Updating venue with ID:', id);
+      console.log('Update filter:', { _id: new ObjectId(id) });
       console.log('================================');
 
-      await this.venueRepo.updateOne({ _id: new ObjectId(id) }, { $set: updateData });
+      // Ensure we're only updating the specific record by ID
+      const updateResult = await this.venueRepo.updateOne({ _id: new ObjectId(id) }, { $set: updateData });
+      console.log('Update result - matchedCount:', updateResult.matchedCount, 'modifiedCount:', updateResult.modifiedCount);
+      
+      if (updateResult.matchedCount === 0) {
+        throw new NotFoundException('Venue not found for update');
+      }
+      
+      if (updateResult.matchedCount > 1) {
+        console.error('WARNING: Multiple venues matched the update filter! This should not happen.');
+      }
       return this.findOne(id);
     } catch (error) {
       console.error('Error updating venue:', error);

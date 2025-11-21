@@ -172,6 +172,84 @@ export class LocationService {
     return imageUrl && imageUrl.trim() !== '' ? imageUrl : '';
   }
 
+  // Helper function to extract price from formData
+  // Priority: formData.fields (field name is "price") > entity.price > formData.price > other formData locations
+  private extractPriceFromFormData(entity: any): number {
+    if (!entity) return 0;
+    
+    // PRIORITY 1: Check formData.fields array for field with name exactly "price" (case-insensitive)
+    if (entity.formData?.fields && Array.isArray(entity.formData.fields)) {
+      // First, try to find field with name exactly "price" (case-insensitive)
+      const priceField = entity.formData.fields.find((field: any) => {
+        const fieldName = field?.name?.toLowerCase() || '';
+        const isExactPriceField = fieldName === 'price';
+        const hasActualValue = field?.actualValue !== undefined && field?.actualValue !== null && field?.actualValue !== '';
+        return isExactPriceField && hasActualValue;
+      });
+      
+      if (priceField && priceField.actualValue !== undefined && priceField.actualValue !== null) {
+        const priceValue = typeof priceField.actualValue === 'string' 
+          ? parseFloat(priceField.actualValue) 
+          : typeof priceField.actualValue === 'number' 
+            ? priceField.actualValue 
+            : 0;
+        if (!isNaN(priceValue) && priceValue >= 0) {
+          return priceValue;
+        }
+      }
+      
+      // If exact "price" field not found, try fields with "price" in the name (case insensitive)
+      const priceFieldWithName = entity.formData.fields.find((field: any) => {
+        const fieldName = field?.name?.toLowerCase() || '';
+        const hasPriceInName = fieldName.includes('price');
+        const hasActualValue = field?.actualValue !== undefined && field?.actualValue !== null && field?.actualValue !== '';
+        return hasPriceInName && hasActualValue;
+      });
+      
+      if (priceFieldWithName && priceFieldWithName.actualValue !== undefined && priceFieldWithName.actualValue !== null) {
+        const priceValue = typeof priceFieldWithName.actualValue === 'string' 
+          ? parseFloat(priceFieldWithName.actualValue) 
+          : typeof priceFieldWithName.actualValue === 'number' 
+            ? priceFieldWithName.actualValue 
+            : 0;
+        if (!isNaN(priceValue) && priceValue >= 0) {
+          return priceValue;
+        }
+      }
+      
+      // Also check for direct Price field (capital P) - fields might be an object too
+      if (entity.formData.fields.Price) {
+        const fieldsPrice = parseFloat(entity.formData.fields.Price);
+        if (!isNaN(fieldsPrice) && fieldsPrice >= 0) {
+          return fieldsPrice;
+        }
+      }
+    }
+    
+    // PRIORITY 2: Check entity.price (direct field)
+    if (entity.price !== undefined && entity.price !== null && entity.price >= 0) {
+      return entity.price;
+    }
+    
+    // PRIORITY 3: Check formData.price (direct field in formData)
+    if (entity.formData?.price !== undefined && entity.formData?.price !== null && entity.formData.price >= 0) {
+      return entity.formData.price;
+    }
+    
+    // PRIORITY 4: Check formData.pricing.starting
+    if (entity.formData?.pricing?.starting && typeof entity.formData.pricing.starting === 'number' && entity.formData.pricing.starting >= 0) {
+      return entity.formData.pricing.starting;
+    }
+    
+    // PRIORITY 5: Check formData.pricing as a number
+    if (entity.formData?.pricing && typeof entity.formData.pricing === 'number' && entity.formData.pricing >= 0) {
+      return entity.formData.pricing;
+    }
+    
+    // Fallback to 0 if no price found
+    return 0;
+  }
+
   async findNearby(lng: number, lat: number, radiusMeters = 5000, type?: 'vendor' | 'venue') {
     try {
       const results = [];
@@ -185,7 +263,21 @@ export class LocationService {
       // Query vendors if type is 'vendor' (default)
       if (searchType === 'vendor') {
         const vendors = await this.vendorRepo.find({
-          where: { isDeleted: false }
+          where: { isDeleted: false },
+          // Explicitly select formData to ensure it's loaded for price extraction
+          select: {
+            _id: true,
+            id: true,
+            name: true,
+            title: true,
+            price: true,
+            formData: true, // Explicitly select formData
+            imageUrl: true,
+            averageRating: true,
+            totalRatings: true,
+            isDeleted: true,
+            isActive: true,
+          } as any,
         });
         totalVendors = vendors.length;
 
@@ -221,11 +313,13 @@ export class LocationService {
             vendorsInRadius++;
             // Extract image URL dynamically from formData
             const imageUrl = this.extractImageUrl(vendor);
+            // Extract price dynamically from formData (prioritizing field with name "price")
+            const price = this.extractPriceFromFormData(vendor);
             
             results.push({
               id: vendor.id.toString(),
               title: vendor.title || vendor.name,
-              price: vendor.price || 150.00,
+              price: price,
               rating: vendor.averageRating || 4.4,
               reviews: vendor.totalRatings || 453,
               image: imageUrl, // Use dynamically extracted image
@@ -239,7 +333,21 @@ export class LocationService {
       // Query venues only if type is explicitly 'venue'
       if (searchType === 'venue') {
         const venues = await this.venueRepo.find({
-          where: { isDeleted: false }
+          where: { isDeleted: false },
+          // Explicitly select formData to ensure it's loaded for price extraction
+          select: {
+            _id: true,
+            id: true,
+            name: true,
+            title: true,
+            price: true,
+            formData: true, // Explicitly select formData
+            imageUrl: true,
+            averageRating: true,
+            totalRatings: true,
+            isDeleted: true,
+            isActive: true,
+          } as any,
         });
 
         for (const venue of venues) {
@@ -272,11 +380,13 @@ export class LocationService {
           if (distance <= radiusMeters) {
             // Extract image URL dynamically from formData
             const imageUrl = this.extractImageUrl(venue);
+            // Extract price dynamically from formData (prioritizing field with name "price")
+            const price = this.extractPriceFromFormData(venue);
             
             results.push({
               id: venue.id.toString(),
               title: venue.title || venue.name,
-              price: venue.price || 150.00,
+              price: price,
               rating: venue.averageRating || 4.4,
               reviews: venue.totalRatings || 453,
               image: imageUrl, // Use dynamically extracted image
