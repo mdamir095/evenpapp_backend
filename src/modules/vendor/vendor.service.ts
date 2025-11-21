@@ -290,12 +290,70 @@ export class VendorService {
           // Generate category-specific pricing
           const categoryPricing = CategoryPricingHelper.generateCategoryPricing(categoryName);
           
+          // Extract image URL from vendor formData (similar to venue listing endpoints)
+          // Priority: formData.fields (MultiImageUpload) > formData.imageUrl > formData.images[0] > vendor.imageUrl
+          let imageUrlFromFormData = '';
+          
+          // First, try to extract from formData.fields (for MultiImageUpload fields)
+          if (vendor.formData?.fields && Array.isArray(vendor.formData.fields)) {
+            // Find any field with MultiImageUpload type OR field name containing "image" (case insensitive)
+            const imageField = vendor.formData.fields.find((field: any) => {
+              const isMultiImageUpload = field.type === 'MultiImageUpload';
+              const hasImageInName = field.name && field.name.toLowerCase().includes('image');
+              const hasActualValue = field.actualValue && Array.isArray(field.actualValue) && field.actualValue.length > 0;
+              return (isMultiImageUpload || hasImageInName) && hasActualValue;
+            });
+            
+            if (imageField && imageField.actualValue && imageField.actualValue.length > 0) {
+              const firstImage = imageField.actualValue[0];
+              // Check for url.imageUrl structure (most common format) - this matches the user's data structure
+              if (firstImage.url && firstImage.url.imageUrl && typeof firstImage.url.imageUrl === 'string') {
+                imageUrlFromFormData = firstImage.url.imageUrl;
+              } else if (firstImage.url && typeof firstImage.url === 'string') {
+                // If url is a direct string
+                imageUrlFromFormData = firstImage.url;
+              } else if (typeof firstImage === 'string') {
+                // If actualValue item is a direct string URL
+                imageUrlFromFormData = firstImage;
+              } else if (firstImage.name && typeof firstImage.name === 'string' && firstImage.name.startsWith('http')) {
+                // If name field contains the URL
+                imageUrlFromFormData = firstImage.name;
+              }
+              
+              // Debug logging
+              console.log('Vendor image extraction:', {
+                vendorId: vendor.id,
+                vendorName: vendor.name,
+                fieldName: imageField.name,
+                fieldType: imageField.type,
+                extractedUrl: imageUrlFromFormData,
+                firstImageStructure: firstImage
+              });
+            }
+          }
+          
+          // If not found in fields, try other formData locations
+          if (!imageUrlFromFormData) {
+            imageUrlFromFormData = vendor.formData?.imageUrl || 
+                                  (Array.isArray(vendor.formData?.images) && vendor.formData.images.length > 0 
+                                    ? vendor.formData.images[0] 
+                                    : '') || 
+                                  '';
+          }
+          
+          // Final fallback to vendor.imageUrl
+          if (!imageUrlFromFormData) {
+            imageUrlFromFormData = vendor.imageUrl || '';
+          }
+          
           return { 
             ...vendor, 
             categoryId: vendorCategoryId,
             categoryName: categoryName,
             // Ensure price is included from vendor data (original price from DB)
             price: vendor.price || vendor.formData?.price || (vendor.formData?.fields?.Price ? parseFloat(vendor.formData.fields.Price) : undefined) || 0,
+            // Set the extracted image URL (no hardcoded fallback)
+            imageUrl: imageUrlFromFormData,
             location: {
               address: storedLocation?.address || vendor.formData?.address || vendor.formData?.location || 'Address not available',
               city: vendor.formData?.city || 'City not available',
@@ -312,12 +370,19 @@ export class VendorService {
         excludeExtraneousValues: true,
       });
       
-      // Explicitly ensure categoryId and categoryName are present after transformation
+      // Explicitly ensure categoryId, categoryName, and imageUrl are present after transformation
       const finalData = data.map((vendorDto: any, index: number) => {
         const originalVendor = populatedVendors[index];
         if (originalVendor) {
           vendorDto.categoryId = originalVendor.categoryId;
           vendorDto.categoryName = originalVendor.categoryName;
+          // Preserve imageUrl and formData for controller to use
+          if (originalVendor.imageUrl !== undefined) {
+            vendorDto.imageUrl = originalVendor.imageUrl;
+          }
+          if (originalVendor.formData) {
+            vendorDto.formData = originalVendor.formData;
+          }
         }
         return vendorDto;
       });

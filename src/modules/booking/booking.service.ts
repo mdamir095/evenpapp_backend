@@ -633,9 +633,24 @@ export class BookingService {
                   : (booking as any).venueId;
 
               if ((booking as any).bookingType === 'venue') {
-                venueOrVendor = await this.venueRepo.findOne({
+                // Try multiple query methods to find the venue (consistent with venue.service.ts)
+                let venue = await this.venueRepo.findOne({
                   where: { _id: venueId, isDeleted: false } as any,
                 });
+                
+                // If not found, try with findOneBy
+                if (!venue) {
+                  venue = await this.venueRepo.findOneBy({ _id: venueId } as any);
+                }
+                
+                // If still not found, try with id field
+                if (!venue) {
+                  venue = await this.venueRepo.findOne({
+                    where: { id: venueId.toString(), isDeleted: false } as any,
+                  });
+                }
+                
+                venueOrVendor = venue;
                 
                 // Apply the same pricing transformation as venue service
                 if (venueOrVendor) {
@@ -719,9 +734,24 @@ export class BookingService {
                 }
               } else if ((booking as any).bookingType === 'vendor') {
                 console.log('Querying vendor with venueId:', venueId);
-                venueOrVendor = await this.vendorRepo.findOne({
+                // Try multiple query methods to find the vendor (consistent approach)
+                let vendor = await this.vendorRepo.findOne({
                   where: { _id: venueId, isDeleted: false } as any,
                 });
+                
+                // If not found, try with findOneBy
+                if (!vendor) {
+                  vendor = await this.vendorRepo.findOneBy({ _id: venueId } as any);
+                }
+                
+                // If still not found, try with id field
+                if (!vendor) {
+                  vendor = await this.vendorRepo.findOne({
+                    where: { id: venueId.toString(), isDeleted: false } as any,
+                  });
+                }
+                
+                venueOrVendor = vendor;
                 
                 // Debug vendor data
                 console.log('Fetched vendor data:', {
@@ -958,7 +988,7 @@ export class BookingService {
             },
             description: venueOrVendor.description || venueOrVendor.formData?.description || 'No description available',
             price: venueOrVendor.price || 0,
-            imagePath: venueOrVendor.imageUrl || 'https://t3.ftcdn.net/jpg/05/06/74/32/360_F_506743235_coW6QAlhxlBWjnRk0VNsHqaXGGH9F4JS.jpg',
+            imagePath: venueOrVendor.imageUrl || '',
             rating: venueOrVendor.averageRating || 5,
             reviews: venueOrVendor.totalRatings || 0,
             ratingLabel: this.getRatingLabel(venueOrVendor.averageRating || 4.4)

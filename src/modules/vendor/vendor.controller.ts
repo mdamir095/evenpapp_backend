@@ -114,20 +114,160 @@ export class VendorController {
     description: 'Invalid pagination parameters',
   })
   async findAllForUser(@Query() paginationDto: VendorPaginationDto): Promise<VendorUserPaginatedResponseDto> {
-    const { data, pagination } = await this.vendorService.findAll(paginationDto);
-    const transformedData = plainToInstance(VendorUserResponseDto, data, { excludeExtraneousValues: true });
-    
-    // Explicitly ensure categoryId and categoryName are present after transformation
-    const finalData = transformedData.map((vendorDto: any, index: number) => {
-      const originalVendor = data[index];
-      if (originalVendor) {
-        vendorDto.categoryId = originalVendor.categoryId;
-        vendorDto.categoryName = originalVendor.categoryName;
+    try {
+      const { data, pagination } = await this.vendorService.findAll(paginationDto);
+      
+      if (!data || !Array.isArray(data)) {
+        throw new Error('Invalid data format from service');
       }
-      return vendorDto;
-    });
-    
-    return { data: finalData, pagination };
+      
+      // Type cast to any to access raw properties that might not be in the DTO
+      const rawData = data as any[];
+      
+      // Debug: Log first vendor to see what data we have
+      if (rawData && rawData.length > 0) {
+        const firstVendor = rawData[0];
+        // Check for Image field in formData.fields - ensure fields is an array
+        let imageField = null;
+        if (firstVendor?.formData?.fields && Array.isArray(firstVendor.formData.fields)) {
+          imageField = firstVendor.formData.fields.find((field: any) => 
+            field?.name && field.name.toLowerCase().includes('image')
+          );
+        }
+        
+        console.log('First vendor data before transformation:', {
+          id: firstVendor?.id,
+          name: firstVendor?.name,
+          imageUrl: firstVendor?.imageUrl,
+          hasFormData: !!firstVendor?.formData,
+          formDataFieldsType: typeof firstVendor?.formData?.fields,
+          isFieldsArray: Array.isArray(firstVendor?.formData?.fields),
+          formDataImageUrl: firstVendor?.formData?.imageUrl,
+          formDataImages: firstVendor?.formData?.images,
+          imageFieldName: imageField?.name,
+          imageFieldType: imageField?.type,
+          imageFieldActualValue: imageField?.actualValue?.[0]
+        });
+      }
+      
+      let transformedData;
+      try {
+        transformedData = plainToInstance(VendorUserResponseDto, rawData, { excludeExtraneousValues: true });
+      } catch (transformError) {
+        console.error('Error transforming vendor data:', transformError);
+        throw new Error(`Failed to transform vendor data: ${transformError.message}`);
+      }
+      
+      // Explicitly ensure categoryId, categoryName, and image are present after transformation
+      // Also remove any unwanted fields like "Image" (capital I) or formData fields
+      const finalData = transformedData.map((vendorDto: any, index: number) => {
+        try {
+          const originalVendor = rawData[index] as any;
+          
+          // Remove any unwanted fields that might have been exposed (like "Image", "formData", etc.)
+          const cleanedDto: any = {};
+          const allowedFields = ['id', 'key', 'title', 'description', 'longDescription', 'categoryId', 'categoryName', 'location', 'price', 'pricing', 'rating', 'reviews', 'image'];
+          allowedFields.forEach(field => {
+            if (vendorDto && vendorDto[field] !== undefined) {
+              cleanedDto[field] = vendorDto[field];
+            }
+          });
+          
+          if (originalVendor) {
+            cleanedDto.categoryId = originalVendor.categoryId || '';
+            cleanedDto.categoryName = originalVendor.categoryName || '';
+            
+            // Extract image URL - ensure it's always a string from index 0
+            let extractedImageUrl = '';
+            
+            // First check if imageUrl was extracted by service
+            if (originalVendor.imageUrl && typeof originalVendor.imageUrl === 'string') {
+              extractedImageUrl = originalVendor.imageUrl;
+            } 
+            // Check formData.imageUrl
+            else if (originalVendor.formData?.imageUrl && typeof originalVendor.formData.imageUrl === 'string') {
+              extractedImageUrl = originalVendor.formData.imageUrl;
+            } 
+            // Check formData.images array
+            else if (Array.isArray(originalVendor.formData?.images) && originalVendor.formData.images.length > 0) {
+              const firstImage = originalVendor.formData.images[0];
+              extractedImageUrl = typeof firstImage === 'string' ? firstImage : '';
+            }
+            // Check formData.fields for MultiImageUpload - this is the main source
+            else if (originalVendor.formData?.fields && Array.isArray(originalVendor.formData.fields)) {
+              // Find any field with MultiImageUpload type OR field name containing "image" (case insensitive)
+              const imageField = originalVendor.formData.fields.find((field: any) => {
+                try {
+                  const isMultiImageUpload = field?.type === 'MultiImageUpload';
+                  const hasImageInName = field?.name && typeof field.name === 'string' && field.name.toLowerCase().includes('image');
+                  const hasActualValue = field?.actualValue && Array.isArray(field.actualValue) && field.actualValue.length > 0;
+                  return (isMultiImageUpload || hasImageInName) && hasActualValue;
+                } catch (e) {
+                  return false;
+                }
+              });
+              
+              if (imageField && imageField.actualValue && imageField.actualValue.length > 0) {
+                const firstImage = imageField.actualValue[0]; // Get index 0 only
+                // Extract URL from the first image object - matches structure: { id: "...", name: "...", url: { imageUrl: "..." } }
+                if (firstImage?.url?.imageUrl && typeof firstImage.url.imageUrl === 'string') {
+                  extractedImageUrl = firstImage.url.imageUrl;
+                } else if (firstImage?.url && typeof firstImage.url === 'string') {
+                  extractedImageUrl = firstImage.url;
+                } else if (typeof firstImage === 'string') {
+                  extractedImageUrl = firstImage;
+                } else if (firstImage?.name && typeof firstImage.name === 'string' && firstImage.name.startsWith('http')) {
+                  extractedImageUrl = firstImage.name;
+                }
+              }
+            }
+            
+            // Set the extracted URL (ensure it's a string, not an array)
+            // Always use lowercase "image" field
+            cleanedDto.image = typeof extractedImageUrl === 'string' && extractedImageUrl !== '' 
+              ? extractedImageUrl 
+              : (vendorDto?.image && typeof vendorDto.image === 'string' ? vendorDto.image : '');
+          }
+          
+          return cleanedDto;
+        } catch (itemError) {
+          console.error(`Error processing vendor at index ${index}:`, itemError);
+          // Return a minimal safe object if processing fails
+          return {
+            id: vendorDto?.id || '',
+            key: vendorDto?.key || '',
+            title: vendorDto?.title || '',
+            description: vendorDto?.description || '',
+            longDescription: vendorDto?.longDescription || '',
+            categoryId: '',
+            categoryName: '',
+            location: vendorDto?.location || {},
+            price: vendorDto?.price || 0,
+            pricing: vendorDto?.pricing || [],
+            rating: vendorDto?.rating || 0,
+            reviews: vendorDto?.reviews || 0,
+            image: ''
+          };
+        }
+      });
+      
+      // Debug: Log first transformed vendor
+      if (finalData && finalData.length > 0) {
+        console.log('First vendor after transformation:', {
+          id: finalData[0]?.id,
+          name: finalData[0]?.title,
+          image: finalData[0]?.image,
+          imageType: typeof finalData[0]?.image,
+          isArray: Array.isArray(finalData[0]?.image),
+          allKeys: Object.keys(finalData[0] || {})
+        });
+      }
+      
+      return { data: finalData, pagination };
+    } catch (error) {
+      console.error('Error in findAllForUser:', error);
+      throw error;
+    }
   }
 
   @Get('user/category/:categoryId')

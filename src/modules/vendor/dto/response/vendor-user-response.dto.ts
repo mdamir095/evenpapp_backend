@@ -111,6 +111,57 @@ export class VendorUserResponseDto {
 
   @ApiProperty({ description: "URL of the vendor's image" })
   @Expose()
-  @Transform(({ obj }) => obj.imageUrl || 'https://t3.ftcdn.net/jpg/05/06/74/32/360_F_506743235_coW6QAlhxlBWjnRk0VNsHqaXGGH9F4JS.jpg')
+  @Transform(({ obj }) => {
+    // Priority: extracted imageUrl from service > formData.imageUrl > formData.images[0] > vendor.imageUrl > empty string
+    // IMPORTANT: Always return a string, never an array
+    
+    // The service sets imageUrl on the vendor object, so check that first
+    if (obj.imageUrl && typeof obj.imageUrl === 'string' && obj.imageUrl !== '') {
+      return obj.imageUrl;
+    }
+    
+    // Check formData.imageUrl
+    if (obj.formData?.imageUrl && typeof obj.formData.imageUrl === 'string') {
+      return obj.formData.imageUrl;
+    }
+    
+    // Check formData.images array
+    if (Array.isArray(obj.formData?.images) && obj.formData.images.length > 0) {
+      const firstImage = obj.formData.images[0];
+      if (typeof firstImage === 'string') {
+        return firstImage;
+      }
+    }
+    
+    // Check formData.fields for MultiImageUpload (in case imageUrl wasn't extracted in service)
+    if (obj.formData?.fields && Array.isArray(obj.formData.fields)) {
+      // Find any field with MultiImageUpload type OR field name containing "image" (case insensitive)
+      const imageField = obj.formData.fields.find((field: any) => {
+        const isMultiImageUpload = field.type === 'MultiImageUpload';
+        const hasImageInName = field.name && field.name.toLowerCase().includes('image');
+        const hasActualValue = field.actualValue && Array.isArray(field.actualValue) && field.actualValue.length > 0;
+        return (isMultiImageUpload || hasImageInName) && hasActualValue;
+      });
+      
+      if (imageField && imageField.actualValue && imageField.actualValue.length > 0) {
+        const firstImage = imageField.actualValue[0];
+        // Extract URL from the first image object (index 0) - ensure we return a string, not the object or array
+        // This matches the structure: { id: "...", name: "...", url: { imageUrl: "..." } }
+        if (firstImage.url && firstImage.url.imageUrl && typeof firstImage.url.imageUrl === 'string') {
+          return firstImage.url.imageUrl;
+        } else if (firstImage.url && typeof firstImage.url === 'string') {
+          return firstImage.url;
+        } else if (typeof firstImage === 'string') {
+          return firstImage;
+        } else if (firstImage.name && typeof firstImage.name === 'string' && firstImage.name.startsWith('http')) {
+          return firstImage.name;
+        }
+      }
+    }
+    
+    // Return empty string instead of hardcoded placeholder
+    // NEVER return an array - always return a string
+    return '';
+  })
   image: string;
 }
