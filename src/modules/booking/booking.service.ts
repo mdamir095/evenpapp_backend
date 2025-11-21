@@ -659,9 +659,10 @@ export class BookingService {
                   (venueOrVendor as any).pricing = venueOrVendor.formData?.pricing || categoryPricing;
                   
                   // Extract image URL from venue formData (similar to venue listing endpoints)
-                  let imageUrlFromFormData = venueOrVendor.imageUrl || venueOrVendor.formData?.imageUrl || venueOrVendor.formData?.images?.[0] || '';
+                  // Priority: formData.fields (MultiImageUpload) > formData.imageUrl > formData.images[0] > venue.imageUrl
+                  let imageUrlFromFormData = '';
                   
-                  // Extract from formData.fields if it exists (for MultiImageUpload fields)
+                  // First, try to extract from formData.fields (for MultiImageUpload fields)
                   if (venueOrVendor.formData?.fields && Array.isArray(venueOrVendor.formData.fields)) {
                     const imageField = venueOrVendor.formData.fields.find((field: any) => 
                       field.type === 'MultiImageUpload' && 
@@ -672,19 +673,49 @@ export class BookingService {
                     
                     if (imageField && imageField.actualValue && imageField.actualValue.length > 0) {
                       const firstImage = imageField.actualValue[0];
-                      // Check for url.imageUrl structure
+                      // Check for url.imageUrl structure (most common format)
                       if (firstImage.url && firstImage.url.imageUrl) {
                         imageUrlFromFormData = firstImage.url.imageUrl;
-                      } else if (typeof firstImage === 'string') {
-                        imageUrlFromFormData = firstImage;
-                      } else if (firstImage.url) {
+                      } else if (firstImage.url && typeof firstImage.url === 'string') {
+                        // If url is a direct string
                         imageUrlFromFormData = firstImage.url;
+                      } else if (typeof firstImage === 'string') {
+                        // If actualValue item is a direct string URL
+                        imageUrlFromFormData = firstImage;
+                      } else if (firstImage.name && typeof firstImage.name === 'string' && firstImage.name.startsWith('http')) {
+                        // If name field contains the URL
+                        imageUrlFromFormData = firstImage.name;
                       }
                     }
                   }
                   
+                  // If not found in fields, try other formData locations
+                  if (!imageUrlFromFormData) {
+                    imageUrlFromFormData = venueOrVendor.formData?.imageUrl || 
+                                          (Array.isArray(venueOrVendor.formData?.images) && venueOrVendor.formData.images.length > 0 
+                                            ? venueOrVendor.formData.images[0] 
+                                            : '') || 
+                                          '';
+                  }
+                  
+                  // Final fallback to venue.imageUrl
+                  if (!imageUrlFromFormData) {
+                    imageUrlFromFormData = venueOrVendor.imageUrl || '';
+                  }
+                  
                   // Set the extracted image URL on the venue object (no hardcoded fallback)
-                  (venueOrVendor as any).imageUrl = imageUrlFromFormData || venueOrVendor.imageUrl || '';
+                  (venueOrVendor as any).imageUrl = imageUrlFromFormData;
+                  
+                  // Debug logging for image extraction
+                  console.log('Venue image extraction for booking:', {
+                    venueId: venueOrVendor.id,
+                    venueName: venueOrVendor.name,
+                    extractedImageUrl: imageUrlFromFormData,
+                    hasFormDataFields: !!venueOrVendor.formData?.fields,
+                    formDataImageUrl: venueOrVendor.formData?.imageUrl,
+                    formDataImages: venueOrVendor.formData?.images,
+                    venueImageUrl: venueOrVendor.imageUrl
+                  });
                 }
               } else if ((booking as any).bookingType === 'vendor') {
                 console.log('Querying vendor with venueId:', venueId);
@@ -2971,3 +3002,4 @@ export class BookingService {
     }
   }
 }
+
