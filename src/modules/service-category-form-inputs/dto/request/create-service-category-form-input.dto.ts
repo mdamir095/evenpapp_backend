@@ -52,7 +52,9 @@ export const SERVICE_CATEGORY_FORM_LABEL_GROUPS: Record<string, ServiceCategoryF
     ServiceCategoryFormLabel.AdditionalServices,
     ServiceCategoryFormLabel.SpecialInstructions,
     ServiceCategoryFormLabel.MenuPreferences,
+    ServiceCategoryFormLabel.ReferenceIdeas,
   ],
+
 };
 
 export const SERVICE_CATEGORY_FORM_LABELS: string[] = Object.values(ServiceCategoryFormLabel);
