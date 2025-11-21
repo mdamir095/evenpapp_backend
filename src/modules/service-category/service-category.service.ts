@@ -109,26 +109,52 @@ export class ServiceCategoryService {
   }
 
   async findAll(page: number, limit: number, search: string): Promise<IPagination<ServiceCategoryResponseDto>> {
-     const skip = (page - 1) * limit;
+    try {
+      const skip = (page - 1) * limit;
   
       // Build aggregation pipeline to join categories with forms and filter by form type 'vendor-service'
       const pipeline: any[] = [
-        // Match categories (optionally filter by search)
+        // Match categories (optionally filter by search and ensure isDeleted is false)
         {
           $match: {
+            isDeleted: { $ne: true },
             ...(search ? { name: { $regex: search, $options: 'i' } } : {})
           }
         },
-        // Convert formId to ObjectId for lookup
+        // Convert formId to ObjectId for lookup (only if formId is valid)
         {
           $addFields: {
             formIdObj: {
               $cond: {
-                if: { $and: [{ $ne: ['$formId', null] }, { $ne: ['$formId', ''] }] },
-                then: { $toObjectId: '$formId' },
+                if: { 
+                  $and: [
+                    { $ne: ['$formId', null] }, 
+                    { $ne: ['$formId', ''] },
+                    { $ne: ['$formId', undefined] }
+                  ] 
+                },
+                then: {
+                  $cond: {
+                    if: { $eq: [{ $type: '$formId' }, 'string'] },
+                    then: {
+                      $cond: {
+                        if: { $eq: [{ $strLenCP: '$formId' }, 24] },
+                        then: { $toObjectId: '$formId' },
+                        else: null
+                      }
+                    },
+                    else: null
+                  }
+                },
                 else: null
               }
             }
+          }
+        },
+        // Filter out categories with invalid formIdObj before lookup
+        {
+          $match: {
+            formIdObj: { $ne: null }
           }
         },
         // Join with forms collection
@@ -150,7 +176,8 @@ export class ServiceCategoryService {
         // Filter to only include categories with forms of type 'vendor-service' (exclude venue-category)
         {
           $match: {
-            'formData.type': 'vendor-service'
+            'formData.type': 'vendor-service',
+            'formData.isDeleted': { $ne: true }
           }
         },
         // Sort by createdAt descending
@@ -258,7 +285,10 @@ export class ServiceCategoryService {
         data,
         pagination,
       };
-
+    } catch (error) {
+      console.error('Error in findAll service-category:', error);
+      throw new NotFoundException(`Failed to fetch service categories: ${error.message}`);
+    }
   }
 
   async findOne(id: string, type?: string): Promise<ServiceCategoryResponseDto> {
