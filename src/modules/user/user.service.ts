@@ -454,29 +454,48 @@ export class UserService {
     page?: number;
     limit?: number;
   }) {
-    const matchConditions: any = { isDeleted: false, isMobileAppUser: true, _id: { $ne: new ObjectId(currentUser.id) } };
+    // Build match conditions - filter by userType: 'USER' and handle isDeleted field that might not exist
+    const matchConditions: any = { 
+      $and: [
+        {
+          $or: [
+            { isDeleted: false },
+            { isDeleted: { $exists: false } }
+          ]
+        },
+        { userType: 'USER' },
+        { _id: { $ne: new ObjectId(currentUser.id) } }
+      ]
+    };
 
+    // Add additional filters to the $and array
     if (email) {
-      matchConditions.email = { $regex: email, $options: 'i' };
+      matchConditions.$and.push({ email: { $regex: email, $options: 'i' } });
     }
-    if (firstName)
-      matchConditions.firstName = { $regex: firstName, $options: 'i' };
-    if (lastName)
-      matchConditions.lastName = { $regex: lastName, $options: 'i' };
-    if (organizationName)
-      matchConditions.organizationName = {
-        $regex: organizationName,
-        $options: 'i',
-      };
+    if (firstName) {
+      matchConditions.$and.push({ firstName: { $regex: firstName, $options: 'i' } });
+    }
+    if (lastName) {
+      matchConditions.$and.push({ lastName: { $regex: lastName, $options: 'i' } });
+    }
+    if (organizationName) {
+      matchConditions.$and.push({ organizationName: { $regex: organizationName, $options: 'i' } });
+    }
     if (search) {
       const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      matchConditions.$or = [
-        { firstName: { $regex: safe, $options: 'i' } },
-        { lastName: { $regex: safe, $options: 'i' } },
-        { email: { $regex: safe, $options: 'i' } },
-        { organizationName: { $regex: safe, $options: 'i' } },
-      ];
+      matchConditions.$and.push({
+        $or: [
+          { firstName: { $regex: safe, $options: 'i' } },
+          { lastName: { $regex: safe, $options: 'i' } },
+          { email: { $regex: safe, $options: 'i' } },
+          { organizationName: { $regex: safe, $options: 'i' } },
+        ]
+      });
     }
+    
+    console.log('findAll - Match conditions:', JSON.stringify(matchConditions, null, 2));
+    console.log('findAll - Current user ID:', currentUser.id);
+    
     const pipeline: any[] = [
       { $match: matchConditions },
 
@@ -560,9 +579,16 @@ export class UserService {
       { $limit: limit },
     ];
 
+    console.log('findAll - Pipeline:', JSON.stringify(pipeline, null, 2));
+    
     const data = await this.userRepository.aggregate(pipeline).toArray();
+    
+    console.log('findAll - Data found:', data.length);
+    console.log('findAll - First user (if any):', data[0] ? { id: data[0].id, email: data[0].email, userType: data[0].userType } : 'No data');
 
     const total = await this.userRepository.countDocuments(matchConditions);
+    
+    console.log('findAll - Total count:', total);
 
     return {
       data,
