@@ -131,8 +131,10 @@ export class VendorService {
         review: '', // Will be set from formData or default
         enterpriseId: enterpriseId,
         enterpriseName: enterpriseName,
-        albums: processedAlbums
+        albums: processedAlbums,
+        ...(createDto.createdBy && { createdBy: createDto.createdBy })
       });
+      
       const savedVendor = await this.vendorRepo.save(vendor);
       
       // Transform the response
@@ -889,6 +891,11 @@ export class VendorService {
         ...(sanitizedFormData && { formData: sanitizedFormData }),
         updatedAt: new Date()
       };
+      
+      // Set updatedBy from DTO if provided
+      if (updateDto.updatedBy) {
+        updateData.updatedBy = updateDto.updatedBy;
+      }
 
       // Ensure we're only updating the specific record by ID
       console.log('Updating vendor with ID:', id);

@@ -178,6 +178,11 @@ export class VenueService {
       console.log('enterpriseName:', venueData.enterpriseName);
       console.log('================================');
       
+      // Add createdBy to venueData if provided
+      if (createDto.createdBy) {
+        venueData.createdBy = createDto.createdBy;
+      }
+      
       const venue = this.venueRepo.create(venueData);
       const savedVenueResult = await this.venueRepo.save(venue);
       // Handle both single entity and array return types
@@ -894,6 +899,11 @@ export class VenueService {
         const finalEnterpriseName = enterpriseName !== undefined ? enterpriseName : updateDto.enterpriseName;
         updateData.enterpriseName = finalEnterpriseName === '' ? null : finalEnterpriseName;
         console.log('Setting enterpriseName in updateData:', updateData.enterpriseName);
+      }
+      
+      // Set updatedBy from DTO if provided
+      if (updateDto.updatedBy) {
+        updateData.updatedBy = updateDto.updatedBy;
       }
       
       console.log('=== UPDATE DATA PREPARATION ===');

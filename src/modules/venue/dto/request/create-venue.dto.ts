@@ -152,5 +152,18 @@ export class CreateVenueDto {
   @IsString()
   @IsOptional()
   enterpriseName?: string;
+
+  @ApiProperty({ 
+    example: '507f1f77bcf86cd799439013', 
+    description: 'The user ID who created this venue',
+    required: false
+  })
+  @Transform(({ value }) => {
+    if (value === '' || value === null) return undefined;
+    return value;
+  })
+  @IsString()
+  @IsOptional()
+  createdBy?: string;
 }
   

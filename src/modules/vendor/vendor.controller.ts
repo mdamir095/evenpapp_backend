@@ -632,6 +632,7 @@ export class VendorController {
   update(
     @Param('id') id: string,
     @Body() updateVendorDto: UpdateVendorDto,
+    @Req() req: any,
   ): Promise<VendorResponseDto> {
     return this.vendorService.update(id, updateVendorDto);
   }

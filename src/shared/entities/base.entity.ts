@@ -31,8 +31,8 @@ export abstract class BaseModel extends BaseEntity {
     setDefaultValues() {
       if (this.isActive === undefined || this.isActive === null) this.isActive = true;
       if (this.isDeleted === undefined || this.isDeleted === null) this.isDeleted = false;
-      this.createdBy = 'system';
-      this.updatedBy = 'system';
+      if (!this.createdBy) this.createdBy = 'system';
+      if (!this.updatedBy) this.updatedBy = 'system';
       this.createdAt = new Date();
       this.updatedAt = new Date();
     }

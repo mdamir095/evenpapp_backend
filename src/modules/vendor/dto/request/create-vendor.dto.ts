@@ -130,4 +130,13 @@ export class CreateVendorDto {
     name: string;
     images: string[];
   }>;
+
+  @ApiProperty({ 
+    example: '507f1f77bcf86cd799439013', 
+    description: 'The user ID who created this vendor',
+    required: false
+  })
+  @IsString()
+  @IsOptional()
+  createdBy?: string;
 }

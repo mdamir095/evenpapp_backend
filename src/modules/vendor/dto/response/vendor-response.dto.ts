@@ -141,4 +141,12 @@ export class VendorResponseDto {
   @Transform(({ obj }) => obj.totalRatings || 0)
   reviews: number;
 
+  @ApiProperty({ description: 'Created by user' })
+  @Expose()
+  createdBy: string;
+
+  @ApiProperty({ description: 'Last updated by user' })
+  @Expose()
+  updatedBy: string;
+
 }
