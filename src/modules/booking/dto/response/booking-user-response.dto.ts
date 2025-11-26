@@ -113,4 +113,24 @@ export class BookingUserResponseDto {
   @Expose()
   @Transform(({ obj }) => obj.offerStatus ?? (obj.userHasSubmittedOffer ? 'done' : 'no offer'))
   offerStatus?: string;
+
+  @ApiProperty({ description: 'User ID who created this booking', example: 'USER123' })
+  @Expose()
+  @Transform(({ obj }) => obj.createdBy || '')
+  createdBy?: string;
+
+  @ApiProperty({ description: 'Full name of user who created this booking', example: 'Shiv Kumar' })
+  @Expose()
+  @Transform(({ obj }) => obj.createdByName || '')
+  createdByName?: string;
+
+  @ApiProperty({ description: 'User ID who last updated this booking', example: 'USER456' })
+  @Expose()
+  @Transform(({ obj }) => obj.updatedBy || '')
+  updatedBy?: string;
+
+  @ApiProperty({ description: 'Full name of user who last updated this booking', example: 'Rahul Yadav' })
+  @Expose()
+  @Transform(({ obj }) => obj.updatedByName || '')
+  updatedByName?: string;
 }

@@ -59,6 +59,27 @@ export class BookingService {
     private readonly notificationService: NotificationService,
   ) {}
 
+  /**
+   * Helper function to get user full name from user ID
+   * @param userId - User ID (can be string or ObjectId)
+   * @returns Full name (firstName + lastName) or empty string if not found
+   */
+  private async getUserName(userId: string | undefined | null): Promise<string> {
+    if (!userId || userId === 'system') {
+      return '';
+    }
+    try {
+      const user = await this.userService.findById(userId);
+      if (user && user.firstName && user.lastName) {
+        return `${user.firstName} ${user.lastName}`.trim();
+      }
+      return '';
+    } catch (error) {
+      console.error('Error fetching user name for userId:', userId, error);
+      return '';
+    }
+  }
+
   async findAllForAdmin(
     page = 1,
     limit = 10,
@@ -335,6 +356,10 @@ export class BookingService {
             }
           }
           
+          // Fetch createdBy and updatedBy user names
+          const createdByName = await this.getUserName((booking as any).createdBy);
+          const updatedByName = await this.getUserName((booking as any).updatedBy);
+          
           if ((booking as any).venueId) {
             try {
               const venueId =
@@ -520,6 +545,11 @@ export class BookingService {
             customerEmail: user?.email || 'unknown@example.com',
             userName: user?.firstName + ' ' + user?.lastName || 'Unknown User',
             userEmail: user?.email || 'unknown@example.com',
+            // CreatedBy and UpdatedBy information
+            createdBy: (booking as any).createdBy || '',
+            createdByName: createdByName,
+            updatedBy: (booking as any).updatedBy || '',
+            updatedByName: updatedByName,
             // Add missing fields for frontend compatibility
             serviceName: venueOrVendor?.title || venueOrVendor?.name || 'Unknown Service',
             startDateTime: (booking as any).eventDate || (booking as any).startTime || new Date().toISOString(),
@@ -727,6 +757,10 @@ export class BookingService {
               console.error('Error fetching user details:', userError);
             }
           }
+          
+          // Fetch createdBy and updatedBy user names
+          const createdByName = await this.getUserName((booking as any).createdBy);
+          const updatedByName = await this.getUserName((booking as any).updatedBy);
           
           if ((booking as any).venueId) {
             try {
@@ -1041,6 +1075,11 @@ export class BookingService {
             imageUrl: venueOrVendor?.imageUrl || '',
             reviews: venueOrVendor?.totalRatings || 0,
             hasOffers: hasOffers, // Dynamically calculated hasOffers flag
+            // CreatedBy and UpdatedBy information
+            createdBy: (booking as any).createdBy || '',
+            createdByName: createdByName,
+            updatedBy: (booking as any).updatedBy || '',
+            updatedByName: updatedByName,
             // Add missing fields for frontend compatibility
             customerName: user?.firstName + ' ' + user?.lastName || 'Unknown Customer',
             customerEmail: user?.email || 'unknown@example.com',
@@ -1280,6 +1319,10 @@ export class BookingService {
       }
     }
 
+    // Fetch createdBy and updatedBy user names
+    const createdByName = await this.getUserName((booking as any).createdBy);
+    const updatedByName = await this.getUserName((booking as any).updatedBy);
+
     const bookingData = {
       ...booking,
       eventDate: (booking as any).eventDate ?? null,
@@ -1296,7 +1339,11 @@ export class BookingService {
       photographyType,
       venueOrVenderInfo,
       hasOffers,
-      userHasSubmittedOffer
+      userHasSubmittedOffer,
+      createdBy: (booking as any).createdBy || '',
+      createdByName: createdByName,
+      updatedBy: (booking as any).updatedBy || '',
+      updatedByName: updatedByName
     };
 
     console.log('findByBookingId - Final bookingData referenceImages:', bookingData.referenceImages);
