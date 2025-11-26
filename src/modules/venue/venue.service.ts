@@ -152,7 +152,7 @@ export class VenueService {
         }));
       }
 
-      const venueData = {
+      const venueData: any = {
         categoryId: serviceCategoryId, // Map serviceCategoryId to categoryId
         name: name,
         title: title,
@@ -165,7 +165,8 @@ export class VenueService {
         imageUrl: '', // Will be set from formData or default
         albums: processedAlbums,
         enterpriseId: enterpriseId,
-        enterpriseName: enterpriseName
+        enterpriseName: enterpriseName,
+        ...(createDto.createdBy && { createdBy: createDto.createdBy })
       };
       
       console.log('=== SAVING VENUE TO DATABASE ===');
@@ -177,11 +178,6 @@ export class VenueService {
       console.log('enterpriseId:', venueData.enterpriseId);
       console.log('enterpriseName:', venueData.enterpriseName);
       console.log('================================');
-      
-      // Add createdBy to venueData if provided
-      if (createDto.createdBy) {
-        venueData.createdBy = createDto.createdBy;
-      }
       
       const venue = this.venueRepo.create(venueData);
       const savedVenueResult = await this.venueRepo.save(venue);
