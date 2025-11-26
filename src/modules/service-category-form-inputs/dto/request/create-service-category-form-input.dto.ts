@@ -22,6 +22,7 @@ export enum ServiceCategoryFormLabel {
   AdditionalServices = 'Additional Services',
   SpecialInstructions = 'Special Instructions',
   MenuPreferences = 'Menu Preferences',
+  TimeSlot = 'Time Slot',
 }
 export const SERVICE_CATEGORY_FORM_LABEL_GROUPS: Record<string, ServiceCategoryFormLabel[]> = {
   photographer: [
@@ -53,6 +54,12 @@ export const SERVICE_CATEGORY_FORM_LABEL_GROUPS: Record<string, ServiceCategoryF
     ServiceCategoryFormLabel.SpecialInstructions,
     ServiceCategoryFormLabel.MenuPreferences,
     ServiceCategoryFormLabel.ReferenceIdeas,
+  ],
+  event: [
+    ServiceCategoryFormLabel.EventDate,
+    ServiceCategoryFormLabel.BudgetRange,
+    ServiceCategoryFormLabel.TimeSlot,
+    ServiceCategoryFormLabel.SpecialInstructions,
   ],
 
 };
