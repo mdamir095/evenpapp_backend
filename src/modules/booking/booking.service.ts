@@ -356,10 +356,6 @@ export class BookingService {
             }
           }
           
-          // Fetch createdBy and updatedBy user names
-          const createdByName = await this.getUserName((booking as any).createdBy);
-          const updatedByName = await this.getUserName((booking as any).updatedBy);
-          
           if ((booking as any).venueId) {
             try {
               const venueId =
@@ -518,6 +514,12 @@ export class BookingService {
             hasOffers = (booking as any).hasOffers ?? false;
           }
 
+          // Fetch createdBy and updatedBy user names from venue/vendor (not from booking)
+          const venueOrVendorCreatedBy = venueOrVendor ? (venueOrVendor as any).createdBy : null;
+          const venueOrVendorUpdatedBy = venueOrVendor ? (venueOrVendor as any).updatedBy : null;
+          const createdByName = await this.getUserName(venueOrVendorCreatedBy);
+          const updatedByName = await this.getUserName(venueOrVendorUpdatedBy);
+
           return {
             ...booking,
             title: venueOrVendor?.title || venueOrVendor?.name || 'Unknown Venue',
@@ -545,10 +547,10 @@ export class BookingService {
             customerEmail: user?.email || 'unknown@example.com',
             userName: user?.firstName + ' ' + user?.lastName || 'Unknown User',
             userEmail: user?.email || 'unknown@example.com',
-            // CreatedBy and UpdatedBy information
-            createdBy: (booking as any).createdBy || '',
+            // CreatedBy and UpdatedBy information from venue/vendor
+            createdBy: venueOrVendorCreatedBy || '',
             createdByName: createdByName,
-            updatedBy: (booking as any).updatedBy || '',
+            updatedBy: venueOrVendorUpdatedBy || '',
             updatedByName: updatedByName,
             // Add missing fields for frontend compatibility
             serviceName: venueOrVendor?.title || venueOrVendor?.name || 'Unknown Service',
@@ -757,10 +759,6 @@ export class BookingService {
               console.error('Error fetching user details:', userError);
             }
           }
-          
-          // Fetch createdBy and updatedBy user names
-          const createdByName = await this.getUserName((booking as any).createdBy);
-          const updatedByName = await this.getUserName((booking as any).updatedBy);
           
           if ((booking as any).venueId) {
             try {
@@ -1056,6 +1054,12 @@ export class BookingService {
             hasOffers = (booking as any).hasOffers ?? false;
           }
 
+          // Fetch createdBy and updatedBy user names from venue/vendor (not from booking)
+          const venueOrVendorCreatedBy = venueOrVendor ? (venueOrVendor as any).createdBy : null;
+          const venueOrVendorUpdatedBy = venueOrVendor ? (venueOrVendor as any).updatedBy : null;
+          const createdByName = await this.getUserName(venueOrVendorCreatedBy);
+          const updatedByName = await this.getUserName(venueOrVendorUpdatedBy);
+
           return {
             ...booking,
             title: venueOrVendor?.title || venueOrVendor?.name || 'Unknown Venue',
@@ -1075,10 +1079,10 @@ export class BookingService {
             imageUrl: venueOrVendor?.imageUrl || '',
             reviews: venueOrVendor?.totalRatings || 0,
             hasOffers: hasOffers, // Dynamically calculated hasOffers flag
-            // CreatedBy and UpdatedBy information
-            createdBy: (booking as any).createdBy || '',
+            // CreatedBy and UpdatedBy information from venue/vendor
+            createdBy: venueOrVendorCreatedBy || '',
             createdByName: createdByName,
-            updatedBy: (booking as any).updatedBy || '',
+            updatedBy: venueOrVendorUpdatedBy || '',
             updatedByName: updatedByName,
             // Add missing fields for frontend compatibility
             customerName: user?.firstName + ' ' + user?.lastName || 'Unknown Customer',
@@ -1319,9 +1323,13 @@ export class BookingService {
       }
     }
 
-    // Fetch createdBy and updatedBy user names
-    const createdByName = await this.getUserName((booking as any).createdBy);
-    const updatedByName = await this.getUserName((booking as any).updatedBy);
+    // Fetch createdBy and updatedBy user names from venue/vendor (not from booking)
+    // Use venue if available, otherwise use vendor
+    const venueOrVendorForNames = venue || vendor;
+    const venueOrVendorCreatedBy = venueOrVendorForNames ? (venueOrVendorForNames as any).createdBy : null;
+    const venueOrVendorUpdatedBy = venueOrVendorForNames ? (venueOrVendorForNames as any).updatedBy : null;
+    const createdByName = await this.getUserName(venueOrVendorCreatedBy);
+    const updatedByName = await this.getUserName(venueOrVendorUpdatedBy);
 
     const bookingData = {
       ...booking,
@@ -1340,9 +1348,9 @@ export class BookingService {
       venueOrVenderInfo,
       hasOffers,
       userHasSubmittedOffer,
-      createdBy: (booking as any).createdBy || '',
+      createdBy: venueOrVendorCreatedBy || '',
       createdByName: createdByName,
-      updatedBy: (booking as any).updatedBy || '',
+      updatedBy: venueOrVendorUpdatedBy || '',
       updatedByName: updatedByName
     };
 
